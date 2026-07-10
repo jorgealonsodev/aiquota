@@ -52,14 +52,14 @@ Chain strategy: pending
 - [x] 2.11 RED `test/core/store.test.ts`: state store update/merge per instance.
 - [x] 2.12 GREEN `src/core/store.ts`.
 
-## Phase 3: Provider Adapters, Test-First (PR3, depends on Phase 2)
-- [ ] 3.1 RED `test/core/providers/codex.test.ts`: parse `wham/usage` fixtures, normalize primary/secondary→`WINDOW_KIND.FiveHour`/`SevenDay`, `resetsAt` cascade, classify 401/403→auth-expired, transport→network, 429/5xx/parse-fail→provider-broken (provider-adapters spec, Codex Dual Auth Cascade + 401 Recovery).
-- [ ] 3.2 GREEN `src/core/providers/codex.ts` (injected `HttpClient`).
-- [ ] 3.3 RED `test/core/providers/claude.test.ts`: normalize `five_hour`/`seven_day`, org-ID cascade cookie→manual→unconfigured, same error taxonomy (provider-adapters spec, Org-ID + Cloudflare-Cleared Fetch reqs).
-- [ ] 3.4 GREEN `src/core/providers/claude.ts` (fetch/parse only; window IO injected).
-- [ ] 3.5 `src/main/adapters/electron/clock.ts`, `httpClient.ts` — real `Clock`/`HttpClient` port impls.
-- [ ] 3.6 `src/main/adapters/electron/secretStore.ts` — `safeStorage` get/set/delete keyed by `credentialsRef`, `maskCookie()` (credential-store spec).
-- [ ] 3.7 `src/main/adapters/electron/settingsStore.ts` — read/write `userData/settings.json` via `src/core/settings.ts`.
+## Phase 3: Provider Adapters, Test-First (PR3, depends on Phase 2) — COMPLETE
+- [x] 3.1 RED `test/core/providers/codex.test.ts`: parse `wham/usage` fixtures, normalize primary/secondary→`WINDOW_KIND.FiveHour`/`SevenDay`, `resetsAt` cascade, classify 401/403→auth-expired, transport→network, 429/5xx/parse-fail→provider-broken (provider-adapters spec, Codex Dual Auth Cascade + 401 Recovery).
+- [x] 3.2 GREEN `src/core/providers/codex.ts` (injected `HttpClient`).
+- [x] 3.3 RED `test/core/providers/claude.test.ts`: normalize `five_hour`/`seven_day`, org-ID cascade cookie→manual→unconfigured, same error taxonomy (provider-adapters spec, Org-ID + Cloudflare-Cleared Fetch reqs).
+- [x] 3.4 GREEN `src/core/providers/claude.ts` (fetch/parse only; window IO injected).
+- [x] 3.5 `src/main/adapters/electron/clock.ts`, `httpClient.ts` — real `Clock`/`HttpClient` port impls (both fully unit-tested; no Electron dependency needed for either).
+- [x] 3.6 `src/main/adapters/electron/secretStore.ts` — `safeStorage` get/set/delete keyed by `credentialsRef`, `maskCookie()` (credential-store spec). `maskCookie()` unit-tested; `ElectronSecretStore` itself thin/untested (lazy-imports `electron` to avoid triggering the package's binary-download side effect at module load — see apply-progress).
+- [x] 3.7 `src/main/adapters/electron/settingsStore.ts` — read/write `userData/settings.json` via `src/core/settings.ts` (unit-tested against a real temp directory; no Electron dependency, `userDataDir` is injected by the caller).
 
 ## Phase 4: Electron Shell (untested, manual QA) + Renderer (PR4, depends on Phase 2–3)
 - [ ] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
