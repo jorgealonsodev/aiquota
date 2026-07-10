@@ -11,6 +11,9 @@ import type { HttpClient } from "./httpClient";
 
 const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const CODEX_ORIGINATOR = "codex_vscode";
+// Non-standard header sent by the official Codex CLI; must be lowercase to
+// match the exact casing the ChatGPT backend expects.
+const ORIGINATOR_HEADER = "originator" as const;
 
 /** Reads the raw contents of a file, or null if it doesn't exist / can't be read. */
 export interface CodexAuthReader {
@@ -120,6 +123,12 @@ interface CodexUsageResponse {
   }>;
 }
 
+/**
+ * Resolves the ISO timestamp a window resets at. `reset_at` (absolute epoch
+ * seconds) takes precedence over `reset_after_seconds` (relative offset from
+ * now) when both are present — an absolute timestamp is more accurate once
+ * the response has been in flight for any non-trivial time.
+ */
 function normalizeResetsAt(win: CodexUsageWindow, nowMs: number): string | null {
   if (typeof win.reset_at === "number") return new Date(win.reset_at * 1000).toISOString();
   if (typeof win.reset_after_seconds === "number") return new Date(nowMs + win.reset_after_seconds * 1000).toISOString();
@@ -241,7 +250,7 @@ export class CodexProvider implements QuotaProvider {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${state.accessToken}`,
       Accept: "application/json",
-      originator: CODEX_ORIGINATOR,
+      [ORIGINATOR_HEADER]: CODEX_ORIGINATOR,
     };
     if (state.accountId) headers["ChatGPT-Account-Id"] = state.accountId;
 
