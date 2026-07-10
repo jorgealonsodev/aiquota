@@ -28,6 +28,12 @@ interface InstanceState {
   /** True while suspended by an auth-expired failure (no automatic polls). */
   suspended: boolean;
   timer: unknown;
+  /**
+   * The in-progress poll attempt, if any. While set, neither a scheduled
+   * timer firing nor a concurrent refresh() may start a second poll() call
+   * for this instance — both coalesce onto this same promise instead.
+   */
+  inFlight: Promise<void> | null;
 }
 
 function classifyFailure(err: unknown): "auth-expired" | "network" | "provider-broken" {
@@ -52,9 +58,10 @@ export class Scheduler {
       failureCount: 0,
       suspended: false,
       timer: undefined,
+      inFlight: null,
     };
     this.instances.set(instanceId, state);
-    this.armNormal(instanceId, state);
+    this.armTimer(instanceId, state, intervalMinutes * 60_000);
   }
 
   /** Stops polling `instanceId` and forgets its state. */
@@ -66,11 +73,20 @@ export class Scheduler {
 
   /**
    * Triggers an immediate poll for one instance, bypassing any backoff wait
-   * or suspension. Does not affect any other instance's timer.
+   * or suspension. Does not affect any other instance's timer. If a poll
+   * for this instance is already in flight (e.g. a scheduled timer just
+   * fired), coalesces onto that same attempt instead of starting a
+   * duplicate concurrent poll.
    */
   async refresh(instanceId: string): Promise<void> {
     const state = this.instances.get(instanceId);
     if (!state) return;
+
+    if (state.inFlight) {
+      await state.inFlight;
+      return;
+    }
+
     this.clearArmedTimer(state);
     await this.runPoll(instanceId, state);
   }
@@ -87,16 +103,8 @@ export class Scheduler {
     }
   }
 
-  private armNormal(instanceId: string, state: InstanceState): void {
-    const delayMs = state.intervalMinutes * 60_000;
-    state.timer = this.clock.setTimer(() => {
-      void this.runScheduledPoll(instanceId);
-    }, delayMs);
-  }
-
-  private armBackoff(instanceId: string, state: InstanceState): void {
-    const stageIndex = Math.min(state.failureCount - 1, BACKOFF_LADDER_SECONDS.length - 1);
-    const delayMs = BACKOFF_LADDER_SECONDS[stageIndex] * 1000;
+  /** Arms a single timer (normal interval or backoff delay) for `instanceId`. */
+  private armTimer(instanceId: string, state: InstanceState, delayMs: number): void {
     state.timer = this.clock.setTimer(() => {
       void this.runScheduledPoll(instanceId);
     }, delayMs);
@@ -104,16 +112,32 @@ export class Scheduler {
 
   private async runScheduledPoll(instanceId: string): Promise<void> {
     const state = this.instances.get(instanceId);
-    if (!state || state.suspended) return;
+    if (!state) return;
+
+    // The timer that invoked this callback just fired; its handle is
+    // stale regardless of what happens below, so clear it immediately
+    // rather than leaving a dangling reference armed.
+    state.timer = undefined;
+
+    if (state.suspended) return;
+    if (state.inFlight) return; // a concurrent poll (e.g. from refresh()) is already running; its own completion arms the next timer
+
     await this.runPoll(instanceId, state);
   }
 
-  private async runPoll(instanceId: string, state: InstanceState): Promise<void> {
+  /** Starts a poll attempt, recording it as in-flight so concurrent callers coalesce onto it. */
+  private runPoll(instanceId: string, state: InstanceState): Promise<void> {
+    const attempt = this.executePoll(instanceId, state);
+    state.inFlight = attempt;
+    return attempt;
+  }
+
+  private async executePoll(instanceId: string, state: InstanceState): Promise<void> {
     try {
       await state.poll();
       state.failureCount = 0;
       state.suspended = false;
-      this.armNormal(instanceId, state);
+      this.armTimer(instanceId, state, state.intervalMinutes * 60_000);
     } catch (err) {
       const kind = classifyFailure(err);
       if (kind === "auth-expired") {
@@ -122,8 +146,11 @@ export class Scheduler {
         // polling until a manual refresh succeeds (polling-scheduler spec).
       } else {
         state.failureCount += 1;
-        this.armBackoff(instanceId, state);
+        const stageIndex = Math.min(state.failureCount - 1, BACKOFF_LADDER_SECONDS.length - 1);
+        this.armTimer(instanceId, state, BACKOFF_LADDER_SECONDS[stageIndex] * 1000);
       }
+    } finally {
+      state.inFlight = null;
     }
   }
 }
