@@ -26,6 +26,7 @@ describe("maskCookie (credential-store spec, No Plaintext Credentials in Logs)",
 vi.mock("electron", () => ({
   safeStorage: {
     isEncryptionAvailable: vi.fn(() => true),
+    getSelectedStorageBackend: vi.fn(() => "secret_service"),
     encryptString: vi.fn((v: string) => Buffer.from(`enc:${v}`)),
     decryptString: vi.fn((b: Buffer) => b.toString().replace(/^enc:/, "")),
   },
@@ -35,6 +36,7 @@ async function getElectronMock() {
   const electron = await import("electron");
   return electron.safeStorage as unknown as {
     isEncryptionAvailable: Mock;
+    getSelectedStorageBackend: Mock;
     encryptString: Mock;
     decryptString: Mock;
   };
@@ -53,6 +55,7 @@ describe("ElectronSecretStore (credential-store spec: Encrypted-at-Rest Storage)
     dir = await fs.mkdtemp(path.join(os.tmpdir(), "aiquota-secret-store-"));
     const mock = await getElectronMock();
     mock.isEncryptionAvailable.mockReturnValue(true);
+    mock.getSelectedStorageBackend.mockReturnValue("secret_service");
     mock.encryptString.mockImplementation((v: string) => Buffer.from(`enc:${v}`));
     mock.decryptString.mockImplementation((b: Buffer) => b.toString().replace(/^enc:/, ""));
   });
@@ -124,6 +127,16 @@ describe("ElectronSecretStore (credential-store spec: Encrypted-at-Rest Storage)
     const store = new ElectronSecretStore(dir);
 
     await expect(store.set("codex-1", "secret")).rejects.toMatchObject({ kind: "credential-broken" });
+  });
+
+  it("throws a TypedError('credential-broken') when safeStorage uses the Linux basic_text backend (fake encryption)", async () => {
+    const mock = await getElectronMock();
+    mock.isEncryptionAvailable.mockReturnValue(true);
+    mock.getSelectedStorageBackend.mockReturnValue("basic_text");
+    const store = new ElectronSecretStore(dir);
+
+    await expect(store.set("codex-1", "secret")).rejects.toMatchObject({ kind: "credential-broken" });
+    await expect(store.get("codex-1")).rejects.toMatchObject({ kind: "credential-broken" });
   });
 
   it("throws a TypedError('credential-broken') when safeStorage.isEncryptionAvailable() is false on get()", async () => {
