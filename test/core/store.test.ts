@@ -3,10 +3,10 @@ import { StateStore } from "../../src/core/store";
 import { WINDOW_KIND } from "../../src/shared/domain";
 
 describe("StateStore (design.md Data Flow: StateStore -> aggregate())", () => {
-  it("creates a new snapshot with sensible defaults for fields not provided", () => {
+  it("register() creates a snapshot with sensible defaults for fields not provided", () => {
     const store = new StateStore();
 
-    const snapshot = store.update("codex-1", { label: "Personal Codex", enabled: true });
+    const snapshot = store.register("codex-1", { label: "Personal Codex", enabled: true });
 
     expect(snapshot).toEqual({
       instanceId: "codex-1",
@@ -17,29 +17,31 @@ describe("StateStore (design.md Data Flow: StateStore -> aggregate())", () => {
     });
   });
 
-  it("merges a partial patch into an existing snapshot, preserving untouched fields", () => {
+  it("update() merges a partial patch into an existing (registered) snapshot, preserving untouched fields", () => {
     const store = new StateStore();
-    store.update("codex-1", {
+    store.register("codex-1", {
       label: "Personal Codex",
       enabled: true,
       status: "healthy",
       windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 40, resetsAt: null }],
     });
 
-    const updated = store.update("codex-1", {
+    store.update("codex-1", {
       windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 55, resetsAt: null }],
+      fetchedAt: 100,
     });
 
-    expect(updated.label).toBe("Personal Codex");
-    expect(updated.enabled).toBe(true);
-    expect(updated.status).toBe("healthy");
-    expect(updated.windows[0].utilization).toBe(55);
+    const updated = store.get("codex-1");
+    expect(updated?.label).toBe("Personal Codex");
+    expect(updated?.enabled).toBe(true);
+    expect(updated?.status).toBe("healthy");
+    expect(updated?.windows[0].utilization).toBe(55);
   });
 
   it("isolates instances: updating one instanceId does not affect another", () => {
     const store = new StateStore();
-    store.update("codex-1", { label: "Codex", enabled: true, status: "healthy" });
-    store.update("claude-1", { label: "Claude", enabled: true, status: "auth-expired" });
+    store.register("codex-1", { label: "Codex", enabled: true, status: "healthy" });
+    store.register("claude-1", { label: "Claude", enabled: true, status: "auth-expired" });
 
     store.update("codex-1", { status: "network" });
 
@@ -49,8 +51,8 @@ describe("StateStore (design.md Data Flow: StateStore -> aggregate())", () => {
 
   it("removes a snapshot so it no longer appears in getAll()", () => {
     const store = new StateStore();
-    store.update("codex-1", { label: "Codex" });
-    store.update("claude-1", { label: "Claude" });
+    store.register("codex-1", { label: "Codex" });
+    store.register("claude-1", { label: "Claude" });
 
     store.remove("codex-1");
 
@@ -60,9 +62,63 @@ describe("StateStore (design.md Data Flow: StateStore -> aggregate())", () => {
 
   it("returns all current snapshots via getAll()", () => {
     const store = new StateStore();
-    store.update("codex-1", { label: "Codex" });
-    store.update("claude-1", { label: "Claude" });
+    store.register("codex-1", { label: "Codex" });
+    store.register("claude-1", { label: "Claude" });
 
     expect(store.getAll().map((s) => s.instanceId).sort()).toEqual(["claude-1", "codex-1"]);
+  });
+
+  it("ignores update() for an instanceId that was never registered (no zombie resurrection)", () => {
+    const store = new StateStore();
+
+    const result = store.update("ghost-1", { label: "Ghost" });
+
+    expect(result).toBeUndefined();
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("ignores update() for an instanceId after it has been removed", () => {
+    const store = new StateStore();
+    store.register("codex-1", { label: "Codex" });
+    store.remove("codex-1");
+
+    const result = store.update("codex-1", { label: "Codex again" });
+
+    expect(result).toBeUndefined();
+    expect(store.getAll()).toEqual([]);
+  });
+
+  it("rejects a stale update whose fetchedAt is older than the current snapshot's, keeping the newest data", () => {
+    const store = new StateStore();
+    store.register("codex-1", { status: "healthy" });
+
+    store.update("codex-1", {
+      fetchedAt: 200,
+      windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 90, resetsAt: null }],
+    });
+    // Out-of-order arrival: an older fetch result completes after the newer one.
+    store.update("codex-1", {
+      fetchedAt: 100,
+      windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 10, resetsAt: null }],
+    });
+
+    const snapshot = store.get("codex-1");
+    expect(snapshot?.windows[0].utilization).toBe(90);
+  });
+
+  it("accepts an update whose fetchedAt is newer than the current snapshot's", () => {
+    const store = new StateStore();
+    store.register("codex-1", { status: "healthy" });
+
+    store.update("codex-1", {
+      fetchedAt: 100,
+      windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 10, resetsAt: null }],
+    });
+    store.update("codex-1", {
+      fetchedAt: 200,
+      windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 90, resetsAt: null }],
+    });
+
+    expect(store.get("codex-1")?.windows[0].utilization).toBe(90);
   });
 });
