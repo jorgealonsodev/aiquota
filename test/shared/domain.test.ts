@@ -5,9 +5,9 @@ import type {
   ProviderInstance,
   QuotaProvider,
   QuotaWindow,
-  Settings,
   SettingsInstance,
 } from "../../src/shared/domain";
+import { makeSettings } from "../helpers/fixtures";
 
 describe("shared domain contracts", () => {
   it("exposes stable window-kind constants for the 5-hour window", () => {
@@ -72,11 +72,7 @@ describe("shared domain contracts", () => {
   });
 
   it("shapes Settings with instances, poll interval, and thresholds", () => {
-    const settings: Settings = {
-      instances: [],
-      pollIntervalMinutes: 5,
-      thresholds: [80, 95],
-    };
+    const settings = makeSettings();
 
     expect(settings.pollIntervalMinutes).toBe(5);
     expect(settings.thresholds).toEqual([80, 95]);

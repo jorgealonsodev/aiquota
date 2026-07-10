@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { IPC_CHANNELS } from "../../src/shared/ipc";
 import type { IpcInvokeMap, IpcPushMap } from "../../src/shared/ipc";
+import { makeSettings } from "../helpers/fixtures";
 
 describe("shared IPC channel map", () => {
   it("names the renderer-to-main invoke channels exactly as design D3 lists them", () => {
@@ -26,11 +27,7 @@ describe("shared IPC channel map", () => {
       [IPC_CHANNELS.getState]: async () => ({ color: "green", instances: [] }),
       [IPC_CHANNELS.openSettings]: async () => undefined,
       [IPC_CHANNELS.addAccount]: async () => undefined,
-      [IPC_CHANNELS.getSettings]: async () => ({
-        instances: [],
-        pollIntervalMinutes: 5,
-        thresholds: [80, 95],
-      }),
+      [IPC_CHANNELS.getSettings]: async () => makeSettings(),
       [IPC_CHANNELS.updateSettings]: async () => undefined,
     };
 
