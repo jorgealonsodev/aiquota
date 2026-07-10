@@ -179,6 +179,51 @@ describe("normalizeCodexUsage (provider-adapters spec, QuotaProvider Contract)",
   it("throws a provider-broken TypedError when the body isn't a JSON object", () => {
     expect(() => normalizeCodexUsage("not-an-object", nowMs)).toThrow(TypedError);
   });
+
+  it("skips windows with used_percent outside the 0-100 range", () => {
+    const body = {
+      rate_limit: {
+        primary_window: { used_percent: 101 },
+        secondary_window: { used_percent: -1 },
+      },
+    };
+
+    expect(() => normalizeCodexUsage(body, nowMs)).toThrow(TypedError);
+  });
+
+  it("skips windows with non-finite used_percent", () => {
+    const body = {
+      rate_limit: {
+        primary_window: { used_percent: NaN },
+      },
+    };
+
+    expect(() => normalizeCodexUsage(body, nowMs)).toThrow(TypedError);
+  });
+
+  it("treats an invalid reset_at as no reset time instead of letting Invalid Date escape", () => {
+    const body = {
+      rate_limit: {
+        primary_window: { used_percent: 5, reset_at: -1 },
+      },
+    };
+
+    const windows = normalizeCodexUsage(body, nowMs);
+
+    expect(windows[0].resetsAt).toBeNull();
+  });
+
+  it("skips non-object entries in additional_rate_limits", () => {
+    const body = {
+      rate_limit: { primary_window: { used_percent: 5 } },
+      additional_rate_limits: [null, "not-an-object", { metered_feature: "valid", rate_limit: { primary_window: { used_percent: 10 } } }],
+    };
+
+    const windows = normalizeCodexUsage(body, nowMs);
+
+    expect(windows).toHaveLength(2);
+    expect(windows[1].kind).toBe("valid");
+  });
 });
 
 describe("classifyCodexHttpError (provider-adapters spec, Codex 401 Recovery)", () => {
@@ -346,6 +391,22 @@ describe("CodexProvider (provider-adapters spec, Codex Dual Auth Cascade + Per-I
 
     const req = httpClient.requests[0];
     expect(req.init?.headers).not.toHaveProperty("ChatGPT-Account-Id");
+  });
+
+  it("configure() normalizes an authReader.read() rejection to TypedError('auth-expired')", async () => {
+    const provider = new CodexProvider({
+      httpClient: new FakeHttpClient(),
+      clock: { now: () => 0 },
+      authReader: {
+        async read(): Promise<string | null> {
+          throw new Error("EACCES: permission denied");
+        },
+      },
+      homeDir: "/home/alice",
+      platform: "linux",
+    });
+
+    await expect(provider.configure(instance)).rejects.toMatchObject({ kind: "auth-expired" });
   });
 
   it("configure() re-reads auth.json once when the first parse returns null (transient write-in-progress race)", async () => {

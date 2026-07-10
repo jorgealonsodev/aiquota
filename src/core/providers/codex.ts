@@ -123,6 +123,14 @@ interface CodexUsageResponse {
   }>;
 }
 
+function isValidPercent(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+function isValidEpochSeconds(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 /**
  * Resolves the ISO timestamp a window resets at. `reset_at` (absolute epoch
  * seconds) takes precedence over `reset_after_seconds` (relative offset from
@@ -130,13 +138,15 @@ interface CodexUsageResponse {
  * the response has been in flight for any non-trivial time.
  */
 function normalizeResetsAt(win: CodexUsageWindow, nowMs: number): string | null {
-  if (typeof win.reset_at === "number") return new Date(win.reset_at * 1000).toISOString();
-  if (typeof win.reset_after_seconds === "number") return new Date(nowMs + win.reset_after_seconds * 1000).toISOString();
+  if (isValidEpochSeconds(win.reset_at)) return new Date(win.reset_at * 1000).toISOString();
+  if (typeof win.reset_after_seconds === "number" && Number.isFinite(win.reset_after_seconds)) {
+    return new Date(nowMs + win.reset_after_seconds * 1000).toISOString();
+  }
   return null;
 }
 
 function toWindow(win: CodexUsageWindow | undefined, kind: string, label: string, nowMs: number): QuotaWindow | null {
-  if (!win || typeof win.used_percent !== "number") return null;
+  if (!win || !isValidPercent(win.used_percent)) return null;
   return { kind, label, utilization: win.used_percent, resetsAt: normalizeResetsAt(win, nowMs) };
 }
 
@@ -167,6 +177,7 @@ export function normalizeCodexUsage(body: unknown, nowMs: number): QuotaWindow[]
   const additional = (body as CodexUsageResponse).additional_rate_limits;
   if (Array.isArray(additional)) {
     for (const extra of additional) {
+      if (typeof extra !== "object" || extra === null) continue;
       // Skip entries missing both identification fields — retaining an unlabelled
       // window would produce ambiguous UI output and hide real data quality issues.
       const label = extra.limit_name ?? extra.metered_feature;
@@ -221,12 +232,22 @@ export class CodexProvider implements QuotaProvider {
     const join = this.deps.platform === "win32" ? path.win32.join : path.posix.join;
     const authPath = join(home, "auth.json");
 
-    const raw = await this.deps.authReader.read(authPath);
+    let raw: string | null;
+    try {
+      raw = await this.deps.authReader.read(authPath);
+    } catch (err) {
+      throw new TypedError("auth-expired", `Failed to read Codex auth file: ${(err as Error).message}`);
+    }
     let tokens = raw === null ? null : parseCodexAuthFile(raw);
     // Re-read once on parse failure: the file may have been partially written
     // during a concurrent auth refresh (transient write-in-progress race).
     if (raw !== null && tokens === null) {
-      const rawRetry = await this.deps.authReader.read(authPath);
+      let rawRetry: string | null;
+      try {
+        rawRetry = await this.deps.authReader.read(authPath);
+      } catch (err) {
+        throw new TypedError("auth-expired", `Failed to read Codex auth file: ${(err as Error).message}`);
+      }
       tokens = rawRetry === null ? null : parseCodexAuthFile(rawRetry);
     }
     if (!tokens) {
