@@ -85,4 +85,31 @@ describe("aggregate() tray contract (tray-status spec)", () => {
 
     expect(result.tooltip).toBe("Codex error · Claude 62%");
   });
+
+  it("is red exactly at the 91% boundary (just above the 90% amber ceiling)", () => {
+    const result = aggregate([
+      snapshot({ windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 91, resetsAt: null }] }),
+    ]);
+
+    expect(result.color).toBe("red");
+  });
+
+  it("is gray for an empty snapshot list", () => {
+    const result = aggregate([]);
+
+    expect(result.color).toBe("gray");
+    expect(result.tooltip).toBe("");
+  });
+
+  it("is red when a red instance sits alongside a separate erroring instance (red wins, literal spec scenario)", () => {
+    const result = aggregate([
+      snapshot({
+        instanceId: "codex-1",
+        windows: [{ kind: WINDOW_KIND.FiveHour, label: "Last 5 hours", utilization: 95, resetsAt: null }],
+      }),
+      snapshot({ instanceId: "claude-1", label: "Claude", status: "provider-broken", windows: [] }),
+    ]);
+
+    expect(result.color).toBe("red");
+  });
 });
