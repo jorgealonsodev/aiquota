@@ -46,7 +46,11 @@ interface ClaudeUsageResponse {
 
 function toWindow(win: ClaudeUsageWindow | undefined, kind: string, label: string): QuotaWindow | null {
   if (!win || typeof win.utilization !== "number") return null;
-  return { kind, label, utilization: win.utilization, resetsAt: win.resets_at ?? null };
+  // Skip non-finite values (NaN, Infinity, -Infinity) — they indicate a corrupted response.
+  if (!Number.isFinite(win.utilization)) return null;
+  // Clamp to [0, 100] — the API occasionally returns values slightly outside range.
+  const utilization = Math.min(100, Math.max(0, win.utilization));
+  return { kind, label, utilization, resetsAt: win.resets_at ?? null };
 }
 
 /**
@@ -94,6 +98,9 @@ interface ClaudeInstanceState {
   cf: CfEscalation;
 }
 
+/** Valid org ID pattern: alphanumeric, underscores, and hyphens, 1-128 chars. */
+const ORG_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+
 export class ClaudeProvider implements QuotaProvider {
   readonly providerId = "claude" as const;
   private readonly instances = new Map<string, ClaudeInstanceState>();
@@ -108,7 +115,10 @@ export class ClaudeProvider implements QuotaProvider {
    */
   async configure(instance: ProviderInstance & { orgId?: string }): Promise<void> {
     const cookieOrgId = await this.deps.windowIO.readLastActiveOrgCookie();
-    const orgId = cookieOrgId ?? instance.orgId ?? null;
+    const rawOrgId = cookieOrgId ?? instance.orgId ?? null;
+    // Validate org ID format before trusting it — an invalid ID would produce
+    // a malformed URL and a hard-to-diagnose provider-broken error downstream.
+    const orgId = rawOrgId !== null && ORG_ID_RE.test(rawOrgId) ? rawOrgId : null;
 
     this.instances.set(instance.instanceId, {
       orgId,

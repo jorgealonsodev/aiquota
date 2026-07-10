@@ -275,6 +275,16 @@ describe("CodexProvider (provider-adapters spec, Codex Dual Auth Cascade + Per-I
     await expect(provider.fetchQuota(instance)).rejects.toMatchObject({ kind: "network" });
   });
 
+  it("fetchQuota throws provider-broken when the response body fails JSON parsing", async () => {
+    const { provider, httpClient } = makeProvider({
+      "/home/alice/.codex/auth.json": JSON.stringify({ tokens: { access_token: "at-1", account_id: "acct-1" } }),
+    });
+    await provider.configure(instance);
+    httpClient.queueJsonParseFailure(200);
+
+    await expect(provider.fetchQuota(instance)).rejects.toMatchObject({ kind: "provider-broken" });
+  });
+
   it("fetchQuota throws provider-broken on a 503 without flipping authStatus away from healthy", async () => {
     const { provider, httpClient } = makeProvider({
       "/home/alice/.codex/auth.json": JSON.stringify({ tokens: { access_token: "at-1", account_id: "acct-1" } }),

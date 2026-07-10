@@ -75,6 +75,28 @@ describe("normalizeClaudeUsage (provider-adapters spec, QuotaProvider Contract)"
   it("throws a provider-broken TypedError when the body isn't a JSON object", () => {
     expect(() => normalizeClaudeUsage(null)).toThrow(TypedError);
   });
+
+  it("clamps utilization above 100 to 100", () => {
+    const windows = normalizeClaudeUsage({ five_hour: { utilization: 150, resets_at: "2026-07-10T15:00:00.000Z" } });
+    expect(windows[0].utilization).toBe(100);
+  });
+
+  it("clamps utilization below 0 to 0", () => {
+    const windows = normalizeClaudeUsage({ five_hour: { utilization: -5, resets_at: "2026-07-10T15:00:00.000Z" } });
+    expect(windows[0].utilization).toBe(0);
+  });
+
+  it("skips a window with a non-finite utilization value (NaN/Infinity)", () => {
+    expect(() => normalizeClaudeUsage({ five_hour: { utilization: Number.NaN } })).toThrow(TypedError);
+  });
+
+  it("throws provider-broken when all windows have non-finite utilization (no valid windows remain)", () => {
+    try {
+      normalizeClaudeUsage({ five_hour: { utilization: Infinity }, seven_day: { utilization: Number.NaN } });
+    } catch (err) {
+      expect((err as TypedError).kind).toBe("provider-broken");
+    }
+  });
 });
 
 describe("classifyClaudeHttpError (provider-adapters spec, shared error taxonomy)", () => {
@@ -127,6 +149,16 @@ describe("ClaudeProvider org-ID discovery (provider-adapters spec, Claude Org-ID
     expect(await provider.authStatus(instance)).toBe("unconfigured");
     await expect(provider.fetchQuota(instance)).rejects.toMatchObject({ kind: "auth-expired" });
     expect(windowIO.calls).toHaveLength(0);
+  });
+
+  it("marks the instance unconfigured when orgId fails the format validation /^[A-Za-z0-9_-]{1,128}$/", async () => {
+    const windowIO = new FakeClaudeWindowIO();
+    windowIO.cookieOrgId = null;
+    const provider = new ClaudeProvider({ windowIO });
+
+    await provider.configure({ ...instance, orgId: "invalid org id with spaces!" });
+
+    expect(await provider.authStatus(instance)).toBe("unconfigured");
   });
 });
 
@@ -208,5 +240,16 @@ describe("ClaudeProvider fetchQuota (provider-adapters spec, Cloudflare-Cleared 
     await provider.fetchQuota(other);
 
     expect(windowIO.calls[1].mode).toBe("hidden");
+  });
+
+  it("throws provider-broken when the usage body is not a parseable object (parse-failure path)", async () => {
+    const windowIO = new FakeClaudeWindowIO();
+    windowIO.cookieOrgId = "org-1";
+    const provider = new ClaudeProvider({ windowIO });
+    await provider.configure(instance);
+    // body = null simulates an unparseable response (normalizeClaudeUsage throws provider-broken on null)
+    windowIO.queue({ challengeDetected: false, status: 200, body: null });
+
+    await expect(provider.fetchQuota(instance)).rejects.toMatchObject({ kind: "provider-broken" });
   });
 });
