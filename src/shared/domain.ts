@@ -27,10 +27,20 @@ export interface QuotaWindow {
 
 export type AuthStatus = "healthy" | "auth-expired" | "unconfigured";
 
-export interface TypedError {
-  kind: "auth-expired" | "network" | "provider-broken";
-  status?: number;
-  message?: string;
+/**
+ * Thrown by QuotaProvider.fetchQuota/authStatus/configure on failure
+ * (design D5 error taxonomy). `message` is mandatory so every catch site has
+ * a human-readable reason, not just a machine-readable `kind`.
+ */
+export class TypedError extends Error {
+  constructor(
+    readonly kind: "auth-expired" | "network" | "provider-broken",
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = "TypedError";
+  }
 }
 
 export interface ProviderInstance {
@@ -42,11 +52,11 @@ export interface ProviderInstance {
 }
 
 export interface QuotaProvider {
-  providerId: "codex" | "claude";
-  configure(): Promise<void>;
+  readonly providerId: "codex" | "claude";
+  configure(instance: ProviderInstance): Promise<void>;
   /** Resolves with the current windows, or throws a TypedError. */
-  fetchQuota(): Promise<QuotaWindow[]>;
-  authStatus(): Promise<AuthStatus>;
+  fetchQuota(instance: ProviderInstance): Promise<QuotaWindow[]>;
+  authStatus(instance: ProviderInstance): Promise<AuthStatus>;
 }
 
 export interface SettingsInstance extends ProviderInstance {

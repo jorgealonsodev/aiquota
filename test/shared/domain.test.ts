@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WK } from "../../src/shared/domain";
+import { TypedError, WK } from "../../src/shared/domain";
 import type {
   AuthStatus,
   ProviderInstance,
@@ -7,7 +7,6 @@ import type {
   QuotaWindow,
   Settings,
   SettingsInstance,
-  TypedError,
 } from "../../src/shared/domain";
 
 describe("shared domain contracts", () => {
@@ -31,13 +30,28 @@ describe("shared domain contracts", () => {
     expect(window.utilization).toBe(42);
   });
 
-  it("shapes a TypedError distinguishing auth-expired from provider-broken", () => {
-    const authExpired: TypedError = { kind: "auth-expired", status: 401 };
-    const providerBroken: TypedError = { kind: "provider-broken", status: 503 };
+  it("is a real throwable Error subclass carrying kind/status/message", () => {
+    let caught: unknown;
+    try {
+      throw new TypedError("auth-expired", "session expired", 401);
+    } catch (err) {
+      caught = err;
+    }
 
-    expect(authExpired.kind).toBe("auth-expired");
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).toBeInstanceOf(TypedError);
+    expect((caught as TypedError).kind).toBe("auth-expired");
+    expect((caught as TypedError).status).toBe(401);
+    expect((caught as TypedError).message).toBe("session expired");
+    expect((caught as TypedError).name).toBe("TypedError");
+  });
+
+  it("distinguishes provider-broken from auth-expired and allows omitting status", () => {
+    const providerBroken = new TypedError("provider-broken", "backend returned 503");
+
     expect(providerBroken.kind).toBe("provider-broken");
-    expect(authExpired.kind).not.toBe(providerBroken.kind);
+    expect(providerBroken.status).toBeUndefined();
+    expect(providerBroken.kind).not.toBe("auth-expired");
   });
 
   it("shapes a ProviderInstance and a SettingsInstance extending it", () => {
@@ -68,22 +82,59 @@ describe("shared domain contracts", () => {
     expect(settings.thresholds).toEqual([80, 95]);
   });
 
-  it("allows a fake QuotaProvider and AuthStatus to satisfy the contract", async () => {
-    const status: AuthStatus = "healthy";
-    const fakeProvider: QuotaProvider = {
+  it("threads the ProviderInstance through configure/fetchQuota/authStatus (design Interfaces/Contracts)", async () => {
+    const instance: ProviderInstance = {
+      instanceId: "claude-1",
       providerId: "claude",
-      configure: async () => undefined,
-      fetchQuota: async () => [
-        { kind: WK.SevenDay, label: "Last 7 days", utilization: 10, resetsAt: null },
-      ],
-      authStatus: async () => status,
+      label: "Work Claude",
+      credentialsRef: "claude-1",
+    };
+    const otherInstance: ProviderInstance = {
+      instanceId: "claude-2",
+      providerId: "claude",
+      label: "Personal Claude",
+      credentialsRef: "claude-2",
     };
 
-    const windows = await fakeProvider.fetchQuota();
-    const resolvedStatus = await fakeProvider.authStatus();
+    const configuredInstanceIds: string[] = [];
+    const fakeProvider: QuotaProvider = {
+      providerId: "claude",
+      configure: async (inst) => {
+        configuredInstanceIds.push(inst.instanceId);
+      },
+      fetchQuota: async (inst) => [
+        { kind: WK.SevenDay, label: `Last 7 days (${inst.label})`, utilization: 10, resetsAt: null },
+      ],
+      authStatus: async (inst) =>
+        inst.instanceId === instance.instanceId ? "healthy" : "unconfigured",
+    };
 
-    expect(windows).toHaveLength(1);
-    expect(windows[0].kind).toBe("seven_day");
-    expect(resolvedStatus).toBe("healthy");
+    await fakeProvider.configure(instance);
+    const windows = await fakeProvider.fetchQuota(instance);
+    const statusForInstance = await fakeProvider.authStatus(instance);
+    const statusForOther = await fakeProvider.authStatus(otherInstance);
+
+    expect(configuredInstanceIds).toEqual(["claude-1"]);
+    expect(windows[0].label).toBe("Last 7 days (Work Claude)");
+    expect(statusForInstance).toBe("healthy");
+    expect(statusForOther).toBe("unconfigured");
+  });
+
+  it("keeps providerId readonly at the type level (compile-time contract, verified by `npm run typecheck`)", () => {
+    // `readonly` is TS-only — it is not enforced at runtime, so this test's
+    // real assertion is the `@ts-expect-error` line below: `tsc` must report
+    // an error here, or `test/tsconfig.json`'s type-check step fails the
+    // build (see package.json `typecheck` script).
+    const fakeProvider: QuotaProvider = {
+      providerId: "codex",
+      configure: async () => undefined,
+      fetchQuota: async () => [],
+      authStatus: async () => "healthy" as AuthStatus,
+    };
+
+    // @ts-expect-error providerId is readonly — reassignment must fail tsc
+    fakeProvider.providerId = "claude";
+
+    expect(fakeProvider.providerId).toBe("claude");
   });
 });
