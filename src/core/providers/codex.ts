@@ -158,7 +158,10 @@ export function normalizeCodexUsage(body: unknown, nowMs: number): QuotaWindow[]
   const additional = (body as CodexUsageResponse).additional_rate_limits;
   if (Array.isArray(additional)) {
     for (const extra of additional) {
-      const label = extra.limit_name ?? extra.metered_feature ?? "Additional limit";
+      // Skip entries missing both identification fields — retaining an unlabelled
+      // window would produce ambiguous UI output and hide real data quality issues.
+      const label = extra.limit_name ?? extra.metered_feature;
+      if (!label) continue;
       const extraWindow = toWindow(extra.rate_limit?.primary_window, label, label, nowMs);
       if (extraWindow) windows.push(extraWindow);
     }
@@ -210,7 +213,13 @@ export class CodexProvider implements QuotaProvider {
     const authPath = join(home, "auth.json");
 
     const raw = await this.deps.authReader.read(authPath);
-    const tokens = raw === null ? null : parseCodexAuthFile(raw);
+    let tokens = raw === null ? null : parseCodexAuthFile(raw);
+    // Re-read once on parse failure: the file may have been partially written
+    // during a concurrent auth refresh (transient write-in-progress race).
+    if (raw !== null && tokens === null) {
+      const rawRetry = await this.deps.authReader.read(authPath);
+      tokens = rawRetry === null ? null : parseCodexAuthFile(rawRetry);
+    }
     if (!tokens) {
       this.instances.set(instance.instanceId, { accessToken: "", authStatus: "unconfigured" });
       return;

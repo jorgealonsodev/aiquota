@@ -153,6 +153,19 @@ describe("normalizeCodexUsage (provider-adapters spec, QuotaProvider Contract)",
     });
   });
 
+  it("skips an additional_rate_limits entry when both limit_name and metered_feature are absent", () => {
+    const body = {
+      rate_limit: { primary_window: { used_percent: 5 } },
+      additional_rate_limits: [
+        { rate_limit: { primary_window: { used_percent: 88 } } }, // no limit_name, no metered_feature
+      ],
+    };
+
+    const windows = normalizeCodexUsage(body, nowMs);
+
+    expect(windows).toHaveLength(1); // only primary, extra skipped
+  });
+
   it("throws a provider-broken TypedError when rate_limit is missing", () => {
     expect(() => normalizeCodexUsage({}, nowMs)).toThrow(TypedError);
     try {
@@ -289,5 +302,62 @@ describe("CodexProvider (provider-adapters spec, Codex Dual Auth Cascade + Per-I
 
     expect(await provider.authStatus(instance)).toBe("healthy");
     expect(await provider.authStatus(other)).toBe("unconfigured");
+  });
+
+  it("multi-instance header isolation: ChatGPT-Account-Id from instance A never leaks to instance B's requests", async () => {
+    const httpClient = new FakeHttpClient();
+    const provider = new CodexProvider({
+      httpClient,
+      clock: { now: () => 0 },
+      authReader: new FakeAuthReader({
+        "/home/alice/.codex/auth.json": JSON.stringify({ tokens: { access_token: "at-1", account_id: "acct-A" } }),
+      }),
+      homeDir: "/home/alice",
+      platform: "linux",
+    });
+    const instanceB: ProviderInstance = { instanceId: "codex-2", providerId: "codex", label: "Work", credentialsRef: "codex-2" };
+
+    // Configure instance A with account id, instance B without (no auth.json for codex-2's path)
+    await provider.configure(instance);
+    // For instanceB we use a separate reader state — simulate a different user with no account_id
+    const providerB = new CodexProvider({
+      httpClient,
+      clock: { now: () => 0 },
+      authReader: new FakeAuthReader({
+        "/home/alice/.codex/auth.json": JSON.stringify({ tokens: { access_token: "at-B" } }),
+      }),
+      homeDir: "/home/alice",
+      platform: "linux",
+    });
+    await providerB.configure(instanceB);
+
+    httpClient.queueJson(200, { rate_limit: { primary_window: { used_percent: 10 } } });
+    await providerB.fetchQuota(instanceB);
+
+    const req = httpClient.requests[0];
+    expect(req.init?.headers).not.toHaveProperty("ChatGPT-Account-Id");
+  });
+
+  it("configure() re-reads auth.json once when the first parse returns null (transient write-in-progress race)", async () => {
+    let readCount = 0;
+    const authReader = {
+      async read(_path: string): Promise<string | null> {
+        readCount++;
+        if (readCount === 1) return "not valid json"; // first read: parse failure
+        return JSON.stringify({ tokens: { access_token: "at-retry", account_id: "acct-retry" } });
+      },
+    };
+    const provider = new CodexProvider({
+      httpClient: new FakeHttpClient(),
+      clock: { now: () => 0 },
+      authReader,
+      homeDir: "/home/alice",
+      platform: "linux",
+    });
+
+    await provider.configure(instance);
+
+    expect(readCount).toBe(2);
+    expect(await provider.authStatus(instance)).toBe("healthy");
   });
 });
