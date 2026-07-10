@@ -2,12 +2,16 @@
 // Storage Keyed by Instance, Secure Credential Deletion). `maskCookie` is a
 // pure function and is unit-tested directly. `ElectronSecretStore` wraps
 // Electron's `safeStorage` (OS-keychain-backed) plus one file per credential
-// on disk -- it is thin Electron/fs glue with no branching logic of its own,
-// so per design.md's Testing table ("SecretStore keying/encoding: Unit;
-// real keychain = manual") it is exercised via manual QA, not a unit test.
+// on disk.
+//
+// Fail-closed policy: if `safeStorage.isEncryptionAvailable()` returns false
+// the store MUST throw rather than silently writing or reading plaintext.
+// Missing-file (ENOENT) is a normal "not set yet" case and returns null;
+// keychain / decryption failures are propagated as TypedError("credential-broken").
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { SafeStorage } from "electron";
+import { TypedError } from "../../../shared/domain";
 
 /**
  * Lazily imports Electron's `safeStorage`. Importing the `electron` package
@@ -44,6 +48,10 @@ export function maskCookie(value: string): string {
  * under `baseDir` (the caller passes e.g.
  * `path.join(app.getPath('userData'), 'credentials')`). Never writes
  * plaintext to disk: `safeStorage.encryptString` runs before every write.
+ *
+ * Fail-closed: throws TypedError("credential-broken") if OS encryption is
+ * unavailable or if decryption fails (e.g. keychain error), so callers are
+ * never silently handed garbled or unencrypted credentials.
  */
 export class ElectronSecretStore implements SecretStore {
   constructor(private readonly baseDir: string) {}
@@ -53,23 +61,37 @@ export class ElectronSecretStore implements SecretStore {
   }
 
   async get(credentialsRef: string): Promise<string | null> {
+    const safeStorage = await loadSafeStorage();
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to read credential to avoid plaintext exposure");
+    }
+    let encrypted: Buffer;
     try {
-      const safeStorage = await loadSafeStorage();
-      const encrypted = await fs.readFile(this.pathFor(credentialsRef));
+      encrypted = await fs.readFile(this.pathFor(credentialsRef));
+    } catch (err) {
+      // ENOENT means the credential simply hasn't been set yet — not an error.
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw new TypedError("credential-broken", `Failed to read credential file: ${(err as Error).message}`);
+    }
+    try {
       return safeStorage.decryptString(encrypted);
-    } catch {
-      return null;
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to decrypt credential: ${(err as Error).message}`);
     }
   }
 
   async set(credentialsRef: string, value: string): Promise<void> {
     const safeStorage = await loadSafeStorage();
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to persist credential in plaintext");
+    }
     const encrypted = safeStorage.encryptString(value);
-    await fs.mkdir(this.baseDir, { recursive: true });
-    await fs.writeFile(this.pathFor(credentialsRef), encrypted);
+    await fs.mkdir(this.baseDir, { recursive: true, mode: 0o700 });
+    await fs.writeFile(this.pathFor(credentialsRef), encrypted, { mode: 0o600 });
   }
 
   async delete(credentialsRef: string): Promise<void> {
     await fs.rm(this.pathFor(credentialsRef), { force: true });
   }
 }
+

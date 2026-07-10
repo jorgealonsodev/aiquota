@@ -34,7 +34,7 @@ export type AuthStatus = "healthy" | "auth-expired" | "unconfigured";
  */
 export class TypedError extends Error {
   constructor(
-    readonly kind: "auth-expired" | "network" | "provider-broken",
+    readonly kind: "auth-expired" | "network" | "provider-broken" | "credential-broken",
     message: string,
     readonly status?: number,
   ) {
