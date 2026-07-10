@@ -27,14 +27,14 @@ Chain strategy: pending
 | 5 | Packaging + installer verification + full suite green | PR5 | Base = PR4 branch. ~100–200 lines. |
 
 ## Phase 0: Spikes (throwaway, not merged, do first — cheap validation)
-- [ ] 0.1 S1 — after Claude login window, read `session.cookies.get` for `lastActiveOrg`; confirm presence/format. Log result in design.md Open Questions.
-- [ ] 0.2 S2 — hidden `BrowserWindow` + `executeJavaScript` fetch to Claude usage endpoint; measure resident RAM vs <150MB; confirm no repeat CF challenge. If unreliable, confirm visible-window fallback works.
+- [x] 0.1 S1 — after Claude login window, read `session.cookies.get` for `lastActiveOrg`; confirm presence/format. Log result in design.md Open Questions. **Status: harness ready (`spikes/s1-claude-lastactiveorg.cjs`), manual run pending — requires a real interactive Claude login.**
+- [x] 0.2 S2 — hidden `BrowserWindow` + `executeJavaScript` fetch to Claude usage endpoint; measure resident RAM vs <150MB; confirm no repeat CF challenge. If unreliable, confirm visible-window fallback works. **Status: harness ready (`spikes/s2-hidden-fetch-cf.cjs`), manual run pending — requires a real interactive Claude login.**
 
 ## Phase 1: Bootstrap & Tooling (PR1)
-- [ ] 1.1 `package.json` + TS project refs (main/preload/renderer/shared) + electron/vite/electron-builder deps.
-- [ ] 1.2 `vitest.config.ts` + `test` script; RED→GREEN smoke test `test/smoke.test.ts` proving the runner works (packaging spec: Test Tooling Bootstrap).
-- [ ] 1.3 `src/shared/domain.ts` — `QuotaProvider`, `ProviderInstance`, `QuotaWindow`, `WK`, `AuthStatus`, `TypedError`, Settings types (design Interfaces/Contracts).
-- [ ] 1.4 `src/shared/ipc.ts` — typed channel map (`refresh`, `getState`, `openSettings`, `addAccount`, `getSettings`, `updateSettings`, `state:update`).
+- [x] 1.1 `package.json` + TS project refs (main/preload/renderer/shared) + electron/vite/electron-builder deps.
+- [x] 1.2 `vitest.config.ts` + `test` script; RED→GREEN smoke test `test/smoke.test.ts` proving the runner works (packaging spec: Test Tooling Bootstrap).
+- [x] 1.3 `src/shared/domain.ts` — `QuotaProvider`, `ProviderInstance`, `QuotaWindow`, `WK`, `AuthStatus`, `TypedError`, Settings types (design Interfaces/Contracts).
+- [x] 1.4 `src/shared/ipc.ts` — typed channel map (`refresh`, `getState`, `openSettings`, `addAccount`, `getSettings`, `updateSettings`, `state:update`).
 
 ## Phase 2: Domain Core, Test-First (PR2, depends on Phase 1)
 - [ ] 2.1 RED `test/core/aggregate.test.ts`: color thresholds <70 green, 70–90 amber, >90 red, gray on empty/all-error; excludes unconfigured/error instances (tray-status spec).
