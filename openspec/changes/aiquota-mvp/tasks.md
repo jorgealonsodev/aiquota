@@ -27,8 +27,10 @@ Chain strategy: pending
 | 5 | Packaging + installer verification + full suite green | PR5 | Base = PR4 branch. ~100–200 lines. |
 
 ## Phase 0: Spikes (throwaway, not merged, do first — cheap validation)
-- [x] 0.1 S1 — after Claude login window, read `session.cookies.get` for `lastActiveOrg`; confirm presence/format. Log result in design.md Open Questions. **Status: harness ready (`spikes/s1-claude-lastactiveorg.cjs`), manual run pending — requires a real interactive Claude login.**
-- [x] 0.2 S2 — hidden `BrowserWindow` + `executeJavaScript` fetch to Claude usage endpoint; measure resident RAM vs <150MB; confirm no repeat CF challenge. If unreliable, confirm visible-window fallback works. **Status: harness ready (`spikes/s2-hidden-fetch-cf.cjs`), manual run pending — requires a real interactive Claude login.**
+- [x] 0.1a S1 harness implemented — `spikes/s1-claude-lastactiveorg.cjs` opens a Claude login window and reads `session.cookies.get` for `lastActiveOrg` once the user confirms login.
+- [ ] 0.1b S1 executed and result recorded — requires a real interactive Claude login (agent cannot perform this). Run `npm run spike:s1`, then log the result in `design.md` under "Open Questions".
+- [x] 0.2a S2 harness implemented — `spikes/s2-hidden-fetch-cf.cjs` opens a hidden `BrowserWindow` + `executeJavaScript` fetch to the Claude usage endpoint, prints Cloudflare-challenge heuristic and process memory metrics.
+- [ ] 0.2b S2 executed and result recorded — requires a real interactive Claude login (agent cannot perform this). Run `npm run spike:s2 -- <orgId>`, measure resident RAM vs <150MB, confirm no repeat CF challenge (fallback: visible-window), then log the result in `design.md` under "Open Questions".
 
 ## Phase 1: Bootstrap & Tooling (PR1)
 - [x] 1.1 `package.json` + TS project refs (main/preload/renderer/shared) + electron/vite/electron-builder deps.
