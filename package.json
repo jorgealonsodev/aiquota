@@ -7,7 +7,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc --noEmit -p test/tsconfig.json",
     "build": "tsc -b",
     "spike:s1": "electron spikes/s1-claude-lastactiveorg.cjs",
     "spike:s2": "electron spikes/s2-hidden-fetch-cf.cjs"
