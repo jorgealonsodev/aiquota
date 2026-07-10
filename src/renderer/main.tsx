@@ -1,5 +1,26 @@
-// Placeholder entry point for the renderer (popup UI).
-// Implemented in Phase 4 (see openspec/changes/aiquota-mvp/tasks.md, task 4.7).
-// This stub exists only so the `src/renderer` TypeScript project reference has
-// a compilable root while Phase 1 wires up the project structure.
-export {};
+// Renderer entry point (Phase 4). Mounts either the popup (`App`) or the
+// settings form (`Settings`) based on the window URL query string.
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App";
+import { Settings } from "./Settings";
+
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("Renderer root element #root not found");
+}
+
+const isSettings = new URLSearchParams(window.location.search).has("settings");
+
+const api = window.electronAPI;
+
+const root = createRoot(rootElement);
+root.render(
+  <StrictMode>
+    {isSettings ? <Settings api={api} /> : <App api={api} />}
+  </StrictMode>,
+);
+
+// Expose the API type for consumers that need to declare `window.electronAPI`.
+export type { ElectronAPI } from "../preload/index";
+
