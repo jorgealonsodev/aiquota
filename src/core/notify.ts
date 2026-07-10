@@ -29,21 +29,35 @@ export interface ReconnectNeededEvent {
   instanceId: string;
 }
 
+/** Minimal clock port so NotifyEngine can prune expired entries by real time. */
+export interface NotifyClock {
+  now(): number;
+}
+
+const REAL_CLOCK: NotifyClock = { now: () => Date.now() };
+
 function notifyOnceKey(instanceId: string, kind: string, resetsAt: string | null, threshold: number): string {
   return `${instanceId}|${kind}|${resetsAt ?? "null"}|${threshold}`;
 }
 
 export class NotifyEngine {
-  private readonly notifiedKeys = new Set<string>();
+  /** Notify-once key -> the resetsAt it was recorded for (for pruning). */
+  private readonly notifiedKeys = new Map<string, string | null>();
   private readonly lastAuthStatus = new Map<string, AuthStatus>();
+
+  constructor(private readonly clock: NotifyClock = REAL_CLOCK) {}
 
   /**
    * Evaluates a window reading against configured thresholds. Each
    * threshold fires at most once per (instanceId, kind, resetsAt, threshold)
    * key — the key naturally re-arms itself once resetsAt changes (new
-   * window generation), so no separate reset step is needed.
+   * window generation), so no separate reset step is needed. Also prunes
+   * any notify-once entries whose resetsAt has already elapsed, bounding
+   * memory growth for a long-running multi-day process.
    */
   processWindow(reading: WindowReading, thresholds: number[]): ThresholdCrossedEvent[] {
+    this.pruneExpired();
+
     const events: ThresholdCrossedEvent[] = [];
 
     for (const threshold of thresholds) {
@@ -52,7 +66,7 @@ export class NotifyEngine {
       const key = notifyOnceKey(reading.instanceId, reading.kind, reading.resetsAt, threshold);
       if (this.notifiedKeys.has(key)) continue;
 
-      this.notifiedKeys.add(key);
+      this.notifiedKeys.set(key, reading.resetsAt);
       events.push({
         type: "threshold-crossed",
         instanceId: reading.instanceId,
@@ -78,5 +92,27 @@ export class NotifyEngine {
       return [{ type: "reconnect-needed", instanceId }];
     }
     return [];
+  }
+
+  /**
+   * Evicts all notify-once and auth-status state for a removed instance,
+   * so a later re-added instance with the same instanceId starts fresh
+   * (first-time threshold and reconnect notifications fire again).
+   */
+  remove(instanceId: string): void {
+    const prefix = `${instanceId}|`;
+    for (const key of this.notifiedKeys.keys()) {
+      if (key.startsWith(prefix)) this.notifiedKeys.delete(key);
+    }
+    this.lastAuthStatus.delete(instanceId);
+  }
+
+  private pruneExpired(): void {
+    const now = this.clock.now();
+    for (const [key, resetsAt] of this.notifiedKeys) {
+      if (resetsAt !== null && new Date(resetsAt).getTime() < now) {
+        this.notifiedKeys.delete(key);
+      }
+    }
   }
 }

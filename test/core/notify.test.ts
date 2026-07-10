@@ -73,4 +73,69 @@ describe("NotifyEngine (notifications spec)", () => {
     expect(afterRecovery).toHaveLength(0);
     expect(thirdTransition).toEqual([{ type: "reconnect-needed", instanceId: "codex-1" }]);
   });
+
+  it("fires exactly at threshold equality (utilization 80 crossing threshold 80)", () => {
+    const engine = new NotifyEngine();
+
+    const events = engine.processWindow(
+      { instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 80, resetsAt: "2026-07-10T12:00:00.000Z" },
+      [80],
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].threshold).toBe(80);
+  });
+
+  it("remove() evicts notify-once and auth-status state so a re-added instance notifies again", () => {
+    const engine = new NotifyEngine();
+    const resetsAt = "2026-07-10T12:00:00.000Z";
+    engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80]);
+    engine.processAuthStatus("claude-1", "auth-expired");
+
+    engine.remove("claude-1");
+
+    const thresholdAgain = engine.processWindow(
+      { instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt },
+      [80],
+    );
+    const reconnectAgain = engine.processAuthStatus("claude-1", "auth-expired");
+
+    expect(thresholdAgain).toHaveLength(1);
+    expect(reconnectAgain).toHaveLength(1);
+  });
+
+  it("remove() only evicts the targeted instance, leaving others untouched", () => {
+    const engine = new NotifyEngine();
+    const resetsAt = "2026-07-10T12:00:00.000Z";
+    engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80]);
+    engine.processWindow({ instanceId: "codex-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80]);
+
+    engine.remove("claude-1");
+
+    const codexRepeat = engine.processWindow(
+      { instanceId: "codex-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt },
+      [80],
+    );
+
+    expect(codexRepeat).toHaveLength(0); // codex-1's notify-once state is untouched by removing claude-1
+  });
+
+  it("prunes notify-once entries whose resetsAt has already passed real time", () => {
+    const pastResetsAt = "2026-07-10T12:00:00.000Z";
+    const fakeClock = { now: () => new Date("2026-07-10T13:00:00.000Z").getTime() };
+    const engine = new NotifyEngine(fakeClock);
+
+    engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt: pastResetsAt }, [80]);
+
+    // A later evaluation triggers pruning: the expired entry is evicted, so
+    // even the same (already-elapsed) resetsAt can notify again — proving
+    // the entry was actually removed from memory, not just logically
+    // superseded (bounds growth for a long-running multi-day process).
+    const afterPrune = engine.processWindow(
+      { instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt: pastResetsAt },
+      [80],
+    );
+
+    expect(afterPrune).toHaveLength(1);
+  });
 });
