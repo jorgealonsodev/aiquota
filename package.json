@@ -1,0 +1,30 @@
+{
+  "name": "aiquota",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIQuota - Electron tray app that monitors AI provider usage quotas (Codex, Claude) across multiple accounts.",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b",
+    "build": "tsc -b",
+    "spike:s1": "electron spikes/s1-claude-lastactiveorg.cjs",
+    "spike:s2": "electron spikes/s2-hidden-fetch-cf.cjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
