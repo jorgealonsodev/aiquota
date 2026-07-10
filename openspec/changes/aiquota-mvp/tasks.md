@@ -68,15 +68,15 @@ Chain strategy: pending
 - [x] F.4 Normalize `ElectronSecretStore.set()`/`delete()` failures (encryptString, mkdir, writeFile, rm) to `TypedError("credential-broken", ...)`.
 
 ## Phase 4: Electron Shell (untested, manual QA) + Renderer (PR4, depends on Phase 2–3)
-- [ ] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
-- [ ] 4.2 `src/main/tray.ts` — icon color from `aggregate()`, tooltip, context menu Open/Refresh/Settings/Quit (tray-status spec). QA: manual click-through each menu item.
-- [ ] 4.3 `src/main/windows.ts` — frameless popup (blur-close, anchored), Settings window, Claude login `BrowserWindow` per `session.fromPartition('persist:claude-{id}')`, hidden fetch window. QA: manual open/close/login flow, popup blur-close.
-- [ ] 4.4 `src/main/ipc.ts` — wire `shared/ipc.ts` channels to core/store/adapters. QA: manually invoke each channel.
-- [ ] 4.5 `src/main/notifications.ts` — native `Notification` from `NotifyEngine` events + reconnect notification. QA: manual threshold cross + reconnect trigger.
-- [ ] 4.6 `src/preload/index.ts` — `contextBridge`, typed IPC only, no node exposure (D2 security).
-- [ ] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders card list.
-- [ ] 4.8 `src/renderer/Card.tsx` — per-window progress, reset countdown, last-update, refresh button, error/reconnect state (quota-popup spec).
-- [ ] 4.9 `src/renderer/Settings.tsx` — provider toggles, labels, interval, thresholds, manual org-ID field (app-settings spec).
+- [x] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
+- [x] 4.2 `src/main/tray.ts` — icon color from `aggregate()`, tooltip, context menu Open/Refresh/Settings/Quit (tray-status spec). QA: manual click-through each menu item.
+- [x] 4.3 `src/main/windows.ts` — frameless popup (blur-close, anchored), Settings window, Claude login `BrowserWindow` per `session.fromPartition('persist:claude-{id}')`, hidden fetch window. QA: manual open/close/login flow, popup blur-close.
+- [x] 4.4 `src/main/ipc.ts` — wire `shared/ipc.ts` channels to core/store/adapters. QA: manually invoke each channel.
+- [x] 4.5 `src/main/notifications.ts` — native `Notification` from `NotifyEngine` events + reconnect notification. QA: manual threshold cross + reconnect trigger.
+- [x] 4.6 `src/preload/index.ts` — `contextBridge`, typed IPC only, no node exposure (D2 security).
+- [x] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders card list.
+- [x] 4.8 `src/renderer/Card.tsx` — per-window progress, reset countdown, last-update, refresh button, error/reconnect state (quota-popup spec).
+- [x] 4.9 `src/renderer/Settings.tsx` — provider toggles, labels, interval, thresholds, manual org-ID field (app-settings spec).
 
 ## Phase 5: Packaging (PR5, depends on Phase 4)
 - [ ] 5.1 `electron-builder.yml` — AppImage/.deb (Linux), NSIS (Windows), no macOS (packaging spec).
