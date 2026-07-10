@@ -114,14 +114,27 @@ export class ElectronSecretStore implements SecretStore {
     if (!safeStorage.isEncryptionAvailable()) {
       throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to persist credential in plaintext");
     }
-    const encrypted = safeStorage.encryptString(value);
-    await fs.mkdir(this.baseDir, { recursive: true, mode: 0o700 });
-    await fs.writeFile(this.pathFor(credentialsRef), encrypted, { mode: 0o600 });
+    let encrypted: Buffer;
+    try {
+      encrypted = safeStorage.encryptString(value);
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to encrypt credential: ${(err as Error).message}`);
+    }
+    try {
+      await fs.mkdir(this.baseDir, { recursive: true, mode: 0o700 });
+      await fs.writeFile(this.pathFor(credentialsRef), encrypted, { mode: 0o600 });
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to persist credential: ${(err as Error).message}`);
+    }
   }
 
   async delete(credentialsRef: string): Promise<void> {
     this.assertSafeRef(credentialsRef);
-    await fs.rm(this.pathFor(credentialsRef), { force: true });
+    try {
+      await fs.rm(this.pathFor(credentialsRef), { force: true });
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to delete credential: ${(err as Error).message}`);
+    }
   }
 }
 

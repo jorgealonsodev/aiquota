@@ -139,6 +139,30 @@ describe("ElectronSecretStore (credential-store spec: Encrypted-at-Rest Storage)
     await expect(store.get("codex-1")).rejects.toMatchObject({ kind: "credential-broken" });
   });
 
+  it("normalizes a writeFile failure in set() to TypedError('credential-broken')", async () => {
+    const store = new ElectronSecretStore(dir);
+    const originalWriteFile = fs.writeFile;
+    vi.spyOn(fs, "writeFile").mockRejectedValueOnce(new Error("ENOSPC: no space left on device"));
+
+    await expect(store.set("codex-1", "secret")).rejects.toMatchObject({ kind: "credential-broken" });
+
+    // Restore normal behavior to verify the credential was not persisted.
+    vi.spyOn(fs, "writeFile").mockImplementation(originalWriteFile);
+    await expect(store.get("codex-1")).resolves.toBeNull();
+  });
+
+  it("normalizes an rm failure in delete() to TypedError('credential-broken')", async () => {
+    const store = new ElectronSecretStore(dir);
+    await store.set("codex-1", "secret");
+    const originalRm = fs.rm;
+    vi.spyOn(fs, "rm").mockRejectedValueOnce(new Error("EPERM: operation not permitted"));
+
+    await expect(store.delete("codex-1")).rejects.toMatchObject({ kind: "credential-broken" });
+
+    vi.spyOn(fs, "rm").mockImplementation(originalRm);
+    await expect(store.get("codex-1")).resolves.toBe("secret");
+  });
+
   it("throws a TypedError('credential-broken') when safeStorage.isEncryptionAvailable() is false on get()", async () => {
     // Store a file first with encryption available
     const store = new ElectronSecretStore(dir);
