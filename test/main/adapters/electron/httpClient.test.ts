@@ -139,5 +139,35 @@ describe("FetchHttpClient (design.md D1 real HttpClient port implementation)", (
       expect(clearTimeoutSpy).toHaveBeenCalled();
       clearTimeoutSpy.mockRestore();
     });
+
+    it("RESOURCE CLEANUP: timer is cleared when fetch() itself rejects (e.g. DNS / network failure)", async () => {
+      // If fetch() rejects before headers arrive the timer must still be cleared
+      // so the process is not kept alive waiting for an abort that never matters.
+      const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+      const networkError = new TypeError("Failed to fetch");
+      vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(networkError)));
+
+      const client = new FetchHttpClient();
+      await expect(client.get("https://example.com/usage", { timeoutMs: 5000 })).rejects.toThrow("Failed to fetch");
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
+
+    it("RESOURCE CLEANUP: timer is cleared on a non-2xx response even when json() is never called", async () => {
+      // Codex/Claude adapters do NOT call json() on non-2xx responses; they
+      // inspect .status only. The timer must be cleared by the time get()
+      // returns so it doesn't leak into subsequent polls.
+      const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+      vi.stubGlobal("fetch", vi.fn(async () => ({ status: 401, json: async () => ({}) })));
+
+      const client = new FetchHttpClient();
+      const response = await client.get("https://example.com/usage", { timeoutMs: 5000 });
+
+      // Status is available, json() not yet called — timer must already be gone
+      expect(response.status).toBe(401);
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
   });
 });
