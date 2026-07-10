@@ -1,0 +1,61 @@
+schema: spec-driven
+
+context: |
+  Project: aiquota (AIQuota) — greenfield, no code yet.
+  Tech stack: Electron + electron-builder, TypeScript (main + renderer),
+  React + Vite for the popup renderer.
+  Targets: Linux (AppImage, .deb) and Windows (NSIS .exe).
+  Architecture: adapter pattern (QuotaProvider) with multi-instance
+  provider connections (per-account/workspace), tray + popup UI, IPC
+  between main and renderer with contextIsolation on.
+  Testing: not yet established (see testing-capabilities).
+
+strict_tdd: true
+
+testing:
+  status: greenfield-to-be-established
+  note: >
+    No test runner exists yet. Strict TDD is enabled per global user
+    config and MUST be enforced starting from the first change that
+    introduces a test runner. Likely candidate: Vitest (unit tests),
+    given the Vite + TypeScript renderer stack. Electron main-process
+    tests may need a Node-based runner (Vitest also works here) plus
+    a manual/E2E strategy (e.g. Playwright for Electron) for
+    tray/popup/IPC flows — to be decided during the first sdd-design
+    that touches testable logic.
+  test_command: ""
+  coverage_threshold: 0
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Flag any change touching credential storage (safeStorage) or
+      provider adapters as high-risk
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Model each provider adapter and each notification/threshold rule
+      as an independent requirement so per-provider isolation is testable
+  design:
+    - Include sequence diagrams for complex flows (login/cookie capture,
+      401 refresh cascades, IPC round-trips)
+    - Document architecture decisions with rationale, especially adapter
+      boundaries and instance/session isolation (session.fromPartition)
+  tasks:
+    - Group by phase (MVP / Phase 2 / Phase 3) per PRD-AIQuota.md section 9
+    - Keep tasks completable in one session
+    - Once a test runner is chosen, all new tasks MUST include a RED task
+      before the corresponding GREEN implementation task (Strict TDD)
+  apply:
+    - Follow existing code patterns once established
+    - No test runner exists yet: the change that introduces the first
+      test runner MUST set up TDD tooling before or alongside the first
+      testable feature
+    tdd: true
+    test_command: ""
+  verify:
+    test_command: ""
+    build_command: ""
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
