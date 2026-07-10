@@ -4,14 +4,26 @@
 // adapters' parsing/normalization/error-classification logic is covered by
 // unit tests using the FakeHttpClient test double
 // (test/helpers/fakeHttpClient.ts).
-import type { HttpClient, HttpRequestInit, HttpResponse } from "../../../core/providers/httpClient";
+import { DEFAULT_HTTP_TIMEOUT_MS, type HttpClient, type HttpRequestInit, type HttpResponse } from "../../../core/providers/httpClient";
 
 export class FetchHttpClient implements HttpClient {
   async get(url: string, init?: HttpRequestInit): Promise<HttpResponse> {
-    const response = await fetch(url, { method: "GET", headers: init?.headers });
-    return {
-      status: response.status,
-      json: () => response.json(),
-    };
+    const timeoutMs = init?.timeoutMs ?? DEFAULT_HTTP_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: init?.headers,
+        signal: controller.signal,
+      });
+      return {
+        status: response.status,
+        json: () => response.json(),
+      };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
