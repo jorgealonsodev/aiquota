@@ -31,6 +31,11 @@ export class SettingsStore {
 
   async save(settings: Settings): Promise<void> {
     await fs.mkdir(this.userDataDir, { recursive: true });
-    await fs.writeFile(this.filePath, JSON.stringify(settings, null, 2), "utf8");
+    // Atomic write via temp file + rename: a concurrent read never sees a
+    // partially-written settings.json (write-then-rename is atomic on POSIX
+    // file systems and Windows NTFS when src/dst are on the same volume).
+    const tmpPath = `${this.filePath}.tmp`;
+    await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), "utf8");
+    await fs.rename(tmpPath, this.filePath);
   }
 }

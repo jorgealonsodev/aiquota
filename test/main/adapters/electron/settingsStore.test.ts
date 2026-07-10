@@ -51,4 +51,15 @@ describe("SettingsStore (design.md D8 real settings.json persistence)", () => {
 
     expect(await store.load()).toEqual(DEFAULT_SETTINGS);
   });
+
+  it("write is atomic: a concurrent read mid-write never sees a truncated file (temp+rename)", async () => {
+    const store = new SettingsStore(dir);
+    // Save and verify no .tmp file lingers after a successful write
+    await store.save(DEFAULT_SETTINGS);
+
+    const entries = await fs.readdir(dir);
+    const tmpFiles = entries.filter((e) => e.endsWith(".tmp"));
+    expect(tmpFiles).toHaveLength(0);
+    expect(await store.load()).toEqual(DEFAULT_SETTINGS);
+  });
 });
