@@ -5,8 +5,11 @@
 // tsconfig project references and the Vitest include glob.
 
 const { app, BrowserWindow, session } = require("electron");
-const readline = require("node:readline");
+const { waitForEnterOrClosed } = require("./lib.cjs");
 
+// Shared with s2-hidden-fetch-cf.cjs so S2 can reuse this login without a
+// second interactive sign-in. Run cleanup (npm run spike:cleanup) when done
+// with both spikes to clear the stored session cookies.
 const PARTITION = "persist:claude-spike-s1";
 
 async function main() {
@@ -24,7 +27,11 @@ async function main() {
   console.log("\n[S1] Log in to Claude in the opened window.");
   console.log("[S1] Once logged in, press ENTER here to read cookies...\n");
 
-  await waitForEnter();
+  const outcome = await waitForEnterOrClosed(win, "[S1]");
+  if (outcome === "closed") {
+    app.exit(1);
+    return;
+  }
 
   const cookies = await ses.cookies.get({ domain: "claude.ai" });
   const lastActiveOrg = cookies.find((cookie) => cookie.name === "lastActiveOrg");
@@ -42,17 +49,8 @@ async function main() {
     );
   }
 
+  console.log("\n[S1] Done. Run `npm run spike:cleanup` to clear the stored session when finished.");
   app.quit();
-}
-
-function waitForEnter() {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin });
-    rl.once("line", () => {
-      rl.close();
-      resolve();
-    });
-  });
 }
 
 main().catch((err) => {

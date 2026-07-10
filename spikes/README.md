@@ -49,6 +49,33 @@ npm run spike:s2 -- <orgId>
 
 Record the result in `design.md` under "Open Questions" once run.
 
+**Note**: S2 intentionally reuses S1's session partition
+(`persist:claude-spike-s1`) — if S1 already ran and logged in, S2's login
+window will already be authenticated and you can press ENTER immediately.
+
+## Cleanup — clear the stored Claude session
+
+Both spikes share one session partition (`persist:claude-spike-s1`) that
+persists cookies (including the Claude session) to disk between runs. Once
+you are done with both spikes, clear it:
+
+```bash
+npm run spike:cleanup
+```
+
+This calls `session.clearStorageData()` on the shared partition. Run it
+before deleting the repo checkout or handing the machine to someone else.
+
+## Hang protection
+
+Both spikes fail fast instead of blocking forever:
+- If you close the login window instead of pressing ENTER, the script
+  detects the `closed` event and exits with an error instead of hanging on
+  stdin.
+- S2 wraps `loadURL` and `executeJavaScript` in a 60s timeout so a stalled
+  page load or an unresolved Cloudflare challenge cannot hang the process
+  indefinitely.
+
 ## Status
 
 | Spike | Status |

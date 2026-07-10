@@ -5,8 +5,14 @@
 // tsconfig project references and the Vitest include glob.
 
 const { app, BrowserWindow, session } = require("electron");
-const readline = require("node:readline");
+const { waitForEnterOrClosed, withTimeout } = require("./lib.cjs");
 
+const LOAD_TIMEOUT_MS = 60_000;
+const FETCH_TIMEOUT_MS = 60_000;
+
+// Intentionally reuses S1's session partition (persist:claude-spike-s1) so a
+// login performed for S1 already carries cookies here — no second
+// interactive sign-in required if S1 ran first in the same profile.
 const PARTITION = "persist:claude-spike-s1";
 
 async function main() {
@@ -26,11 +32,15 @@ async function main() {
     height: 800,
     webPreferences: { session: ses },
   });
-  await loginWin.loadURL("https://claude.ai");
+  await withTimeout(loginWin.loadURL("https://claude.ai"), LOAD_TIMEOUT_MS, "[S2] loadURL(login)");
 
   console.log("\n[S2] Log in to Claude in the opened window (skip if already logged in).");
   console.log("[S2] Press ENTER here once logged in to continue...\n");
-  await waitForEnter();
+  const outcome = await waitForEnterOrClosed(loginWin, "[S2]");
+  if (outcome === "closed") {
+    app.exit(1);
+    return;
+  }
   loginWin.close();
 
   const hiddenWin = new BrowserWindow({
@@ -38,7 +48,11 @@ async function main() {
     webPreferences: { session: ses },
   });
 
-  await hiddenWin.loadURL("https://claude.ai");
+  await withTimeout(
+    hiddenWin.loadURL("https://claude.ai"),
+    LOAD_TIMEOUT_MS,
+    "[S2] loadURL(hidden)",
+  );
 
   const fetchScript = `
     fetch("https://claude.ai/api/organizations/${orgId}/usage", { credentials: "include" })
@@ -49,7 +63,11 @@ async function main() {
       .catch((err) => ({ error: String(err) }));
   `;
 
-  const result = await hiddenWin.webContents.executeJavaScript(fetchScript);
+  const result = await withTimeout(
+    hiddenWin.webContents.executeJavaScript(fetchScript),
+    FETCH_TIMEOUT_MS,
+    "[S2] executeJavaScript(fetch)",
+  );
 
   console.log("[S2] Fetch result:", result);
 
@@ -66,17 +84,8 @@ async function main() {
     );
   }
 
+  console.log("\n[S2] Done. Run `npm run spike:cleanup` to clear the stored session when finished.");
   app.quit();
-}
-
-function waitForEnter() {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin });
-    rl.once("line", () => {
-      rl.close();
-      resolve();
-    });
-  });
 }
 
 main().catch((err) => {
