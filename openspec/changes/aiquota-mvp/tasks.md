@@ -61,6 +61,12 @@ Chain strategy: pending
 - [x] 3.6 `src/main/adapters/electron/secretStore.ts` — `safeStorage` get/set/delete keyed by `credentialsRef`, `maskCookie()` (credential-store spec). Both `maskCookie()` and `ElectronSecretStore` operations (get/set/delete, path traversal guard, missing-key fallback, safeStorage-unavailable, nested dir creation) are unit-tested via a mocked `electron` module (lazy-import avoids the binary-download side effect at module load — see apply-progress).
 - [x] 3.7 `src/main/adapters/electron/settingsStore.ts` — read/write `userData/settings.json` via `src/core/settings.ts` (unit-tested against a real temp directory; no Electron dependency, `userDataDir` is injected by the caller).
 
+## Final-Gate Critical Fixes (PR3 follow-up, autonomous commit batch)
+- [x] F.1 Reject Electron `safeStorage` Linux `basic_text` backend in `src/main/adapters/electron/secretStore.ts`; throw `TypedError("credential-broken", ...)` when `getSelectedStorageBackend() === "basic_text"`.
+- [x] F.2 Serialize concurrent `SettingsStore.save()` calls in `src/main/adapters/electron/settingsStore.ts` via a promise chain so an older invocation cannot overwrite a newer one.
+- [x] F.3 Harden `src/core/providers/codex.ts` normalization: finite `used_percent` in [0, 100]; finite positive `reset_at`; skip non-object `additional_rate_limits` entries; normalize `authReader.read()` rejections to `TypedError("auth-expired", ...)`.
+- [x] F.4 Normalize `ElectronSecretStore.set()`/`delete()` failures (encryptString, mkdir, writeFile, rm) to `TypedError("credential-broken", ...)`.
+
 ## Phase 4: Electron Shell (untested, manual QA) + Renderer (PR4, depends on Phase 2–3)
 - [ ] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
 - [ ] 4.2 `src/main/tray.ts` — icon color from `aggregate()`, tooltip, context menu Open/Refresh/Settings/Quit (tray-status spec). QA: manual click-through each menu item.
