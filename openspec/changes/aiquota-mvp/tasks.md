@@ -39,18 +39,18 @@ Chain strategy: pending
 - [x] 1.4 `src/shared/ipc.ts` — typed channel map (`refresh`, `getState`, `openSettings`, `addAccount`, `getSettings`, `updateSettings`, `state:update`).
 
 ## Phase 2: Domain Core, Test-First (PR2, depends on Phase 1)
-- [ ] 2.1 RED `test/core/aggregate.test.ts`: color thresholds <70 green, 70–90 amber, >90 red, gray on empty/all-error; excludes unconfigured/error instances (tray-status spec).
-- [ ] 2.2 GREEN `src/core/aggregate.ts`.
-- [ ] 2.3 RED `test/core/notify.test.ts`: notify-once key `(instanceId,windowType,resetsAt,threshold)`, reset on `resetsAt` change, independent thresholds (notifications spec).
-- [ ] 2.4 GREEN `src/core/notify.ts`.
-- [ ] 2.5 RED `test/core/scheduler.test.ts`: per-instance timers, manual refresh bypasses backoff, ladder `[60,300,900,1800]s`, `auth-expired` suspends (no backoff), manual refresh clears suspension (polling-scheduler spec).
-- [ ] 2.6 GREEN `src/core/scheduler.ts` (injected `Clock`).
-- [ ] 2.7 RED `test/core/settings.test.ts`: schema validate, default-on-corruption, interval clamp 1–60 (app-settings spec).
-- [ ] 2.8 GREEN `src/core/settings.ts`.
-- [ ] 2.9 RED `test/core/cf.test.ts`: `nextFetchMode(challengeDetected,lastMode)` escalation table (design D4/S2).
-- [ ] 2.10 GREEN `src/core/cf.ts`.
-- [ ] 2.11 RED `test/core/store.test.ts`: state store update/merge per instance.
-- [ ] 2.12 GREEN `src/core/store.ts`.
+- [x] 2.1 RED `test/core/aggregate.test.ts`: color thresholds <70 green, 70–90 amber, >90 red, gray on empty/all-error; excludes unconfigured/error instances (tray-status spec).
+- [x] 2.2 GREEN `src/core/aggregate.ts`.
+- [x] 2.3 RED `test/core/notify.test.ts`: notify-once key `(instanceId,windowType,resetsAt,threshold)`, reset on `resetsAt` change, independent thresholds (notifications spec).
+- [x] 2.4 GREEN `src/core/notify.ts`.
+- [x] 2.5 RED `test/core/scheduler.test.ts`: per-instance timers, manual refresh bypasses backoff, ladder `[60,300,900,1800]s`, `auth-expired` suspends (no backoff), manual refresh clears suspension (polling-scheduler spec).
+- [x] 2.6 GREEN `src/core/scheduler.ts` (injected `Clock`).
+- [x] 2.7 RED `test/core/settings.test.ts`: schema validate, default-on-corruption, interval clamp 1–60 (app-settings spec).
+- [x] 2.8 GREEN `src/core/settings.ts`.
+- [x] 2.9 RED `test/core/cf.test.ts`: `nextFetchMode(challengeDetected,lastMode)` escalation table (design D4/S2).
+- [x] 2.10 GREEN `src/core/cf.ts`.
+- [x] 2.11 RED `test/core/store.test.ts`: state store update/merge per instance.
+- [x] 2.12 GREEN `src/core/store.ts`.
 
 ## Phase 3: Provider Adapters, Test-First (PR3, depends on Phase 2)
 - [ ] 3.1 RED `test/core/providers/codex.test.ts`: parse `wham/usage` fixtures, normalize primary/secondary→`WINDOW_KIND.FiveHour`/`SevenDay`, `resetsAt` cascade, classify 401/403→auth-expired, transport→network, 429/5xx/parse-fail→provider-broken (provider-adapters spec, Codex Dual Auth Cascade + 401 Recovery).
