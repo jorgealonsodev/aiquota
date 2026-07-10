@@ -50,4 +50,70 @@ describe("settings schema validation (app-settings spec)", () => {
     expect(clampInterval(30)).toBe(30);
     expect(clampInterval(999)).toBe(60);
   });
+
+  it("strips unknown extra fields from parsed instances via an explicit allow-list", () => {
+    const raw = {
+      instances: [
+        {
+          instanceId: "codex-1",
+          providerId: "codex",
+          label: "Personal",
+          credentialsRef: "codex-1",
+          enabled: true,
+          token: "leaked-secret",
+        },
+      ],
+      pollIntervalMinutes: 5,
+      thresholds: [80, 95],
+    };
+
+    const parsed = parseSettings(raw);
+
+    expect(parsed.instances[0]).toEqual({
+      instanceId: "codex-1",
+      providerId: "codex",
+      label: "Personal",
+      credentialsRef: "codex-1",
+      enabled: true,
+    });
+    expect(parsed.instances[0]).not.toHaveProperty("token");
+  });
+
+  it("never returns the raw settings object or its nested instances by reference", () => {
+    const raw = {
+      instances: [{ instanceId: "codex-1", providerId: "codex", label: "Personal", credentialsRef: "codex-1", enabled: true }],
+      pollIntervalMinutes: 5,
+      thresholds: [80, 95],
+    };
+
+    const parsed = parseSettings(raw);
+
+    expect(parsed).not.toBe(raw);
+    expect(parsed.instances[0]).not.toBe(raw.instances[0]);
+    expect(parsed.thresholds).not.toBe(raw.thresholds);
+  });
+
+  it("preserves an instance's optional orgId when present via the allow-list", () => {
+    const raw = {
+      instances: [
+        { instanceId: "claude-1", providerId: "claude", label: "Work", credentialsRef: "claude-1", enabled: true, orgId: "org-123" },
+      ],
+      pollIntervalMinutes: 5,
+      thresholds: [80, 95],
+    };
+
+    expect(parseSettings(raw).instances[0].orgId).toBe("org-123");
+  });
+
+  it("falls back to the default thresholds when every configured value is invalid", () => {
+    const raw = { instances: [], pollIntervalMinutes: 5, thresholds: [-5, 500] };
+
+    expect(parseSettings(raw).thresholds).toEqual([80, 95]);
+  });
+
+  it("keeps only the valid thresholds when at least one is in (0, 100]", () => {
+    const raw = { instances: [], pollIntervalMinutes: 5, thresholds: [80, 950] };
+
+    expect(parseSettings(raw).thresholds).toEqual([80]);
+  });
 });
