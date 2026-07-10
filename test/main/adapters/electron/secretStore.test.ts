@@ -33,7 +33,7 @@ vi.mock("electron", () => ({
 
 async function getElectronMock() {
   const electron = await import("electron");
-  return electron.safeStorage as {
+  return electron.safeStorage as unknown as {
     isEncryptionAvailable: Mock;
     encryptString: Mock;
     decryptString: Mock;
