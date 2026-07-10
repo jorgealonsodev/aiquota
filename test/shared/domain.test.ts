@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TypedError, WK } from "../../src/shared/domain";
+import { TypedError, WINDOW_KIND } from "../../src/shared/domain";
 import type {
   AuthStatus,
   ProviderInstance,
@@ -11,16 +11,16 @@ import type {
 
 describe("shared domain contracts", () => {
   it("exposes stable window-kind constants for the 5-hour window", () => {
-    expect(WK.FiveHour).toBe("five_hour");
+    expect(WINDOW_KIND.FiveHour).toBe("five_hour");
   });
 
   it("exposes stable window-kind constants for the 7-day window", () => {
-    expect(WK.SevenDay).toBe("seven_day");
+    expect(WINDOW_KIND.SevenDay).toBe("seven_day");
   });
 
   it("shapes a QuotaWindow that reflects a real provider reading", () => {
     const window: QuotaWindow = {
-      kind: WK.FiveHour,
+      kind: WINDOW_KIND.FiveHour,
       label: "Last 5 hours",
       utilization: 42,
       resetsAt: "2026-07-10T12:00:00.000Z",
@@ -103,7 +103,7 @@ describe("shared domain contracts", () => {
         configuredInstanceIds.push(inst.instanceId);
       },
       fetchQuota: async (inst) => [
-        { kind: WK.SevenDay, label: `Last 7 days (${inst.label})`, utilization: 10, resetsAt: null },
+        { kind: WINDOW_KIND.SevenDay, label: `Last 7 days (${inst.label})`, utilization: 10, resetsAt: null },
       ],
       authStatus: async (inst) =>
         inst.instanceId === instance.instanceId ? "healthy" : "unconfigured",

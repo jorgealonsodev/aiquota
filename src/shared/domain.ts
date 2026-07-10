@@ -8,15 +8,15 @@
  * (e.g. Codex `additional_rate_limits`) using their own string identifiers;
  * `QuotaWindow.kind` is intentionally a plain string to allow that.
  */
-export const WK = {
+export const WINDOW_KIND = {
   FiveHour: "five_hour",
   SevenDay: "seven_day",
 } as const;
 
-export type WellKnownWindowKind = (typeof WK)[keyof typeof WK];
+export type WellKnownWindowKind = (typeof WINDOW_KIND)[keyof typeof WINDOW_KIND];
 
 export interface QuotaWindow {
-  /** Well-known kind (see WK) or a provider-specific identifier. */
+  /** Well-known kind (see WINDOW_KIND) or a provider-specific identifier. */
   kind: string;
   label: string;
   /** Utilization percentage, 0-100. */

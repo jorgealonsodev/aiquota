@@ -35,7 +35,7 @@ Chain strategy: pending
 ## Phase 1: Bootstrap & Tooling (PR1)
 - [x] 1.1 `package.json` + TS project refs (main/preload/renderer/shared) + electron/vite/electron-builder deps.
 - [x] 1.2 `vitest.config.ts` + `test` script; RED→GREEN smoke test `test/smoke.test.ts` proving the runner works (packaging spec: Test Tooling Bootstrap).
-- [x] 1.3 `src/shared/domain.ts` — `QuotaProvider`, `ProviderInstance`, `QuotaWindow`, `WK`, `AuthStatus`, `TypedError`, Settings types (design Interfaces/Contracts).
+- [x] 1.3 `src/shared/domain.ts` — `QuotaProvider`, `ProviderInstance`, `QuotaWindow`, `WINDOW_KIND`, `AuthStatus`, `TypedError`, Settings types (design Interfaces/Contracts).
 - [x] 1.4 `src/shared/ipc.ts` — typed channel map (`refresh`, `getState`, `openSettings`, `addAccount`, `getSettings`, `updateSettings`, `state:update`).
 
 ## Phase 2: Domain Core, Test-First (PR2, depends on Phase 1)
@@ -53,7 +53,7 @@ Chain strategy: pending
 - [ ] 2.12 GREEN `src/core/store.ts`.
 
 ## Phase 3: Provider Adapters, Test-First (PR3, depends on Phase 2)
-- [ ] 3.1 RED `test/core/providers/codex.test.ts`: parse `wham/usage` fixtures, normalize primary/secondary→`WK.FiveHour`/`SevenDay`, `resetsAt` cascade, classify 401/403→auth-expired, transport→network, 429/5xx/parse-fail→provider-broken (provider-adapters spec, Codex Dual Auth Cascade + 401 Recovery).
+- [ ] 3.1 RED `test/core/providers/codex.test.ts`: parse `wham/usage` fixtures, normalize primary/secondary→`WINDOW_KIND.FiveHour`/`SevenDay`, `resetsAt` cascade, classify 401/403→auth-expired, transport→network, 429/5xx/parse-fail→provider-broken (provider-adapters spec, Codex Dual Auth Cascade + 401 Recovery).
 - [ ] 3.2 GREEN `src/core/providers/codex.ts` (injected `HttpClient`).
 - [ ] 3.3 RED `test/core/providers/claude.test.ts`: normalize `five_hour`/`seven_day`, org-ID cascade cookie→manual→unconfigured, same error taxonomy (provider-adapters spec, Org-ID + Cloudflare-Cleared Fetch reqs).
 - [ ] 3.4 GREEN `src/core/providers/claude.ts` (fetch/parse only; window IO injected).
