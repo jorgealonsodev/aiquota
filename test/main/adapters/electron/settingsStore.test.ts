@@ -62,4 +62,31 @@ describe("SettingsStore (design.md D8 real settings.json persistence)", () => {
     expect(tmpFiles).toHaveLength(0);
     expect(await store.load()).toEqual(DEFAULT_SETTINGS);
   });
+
+  it("REGRESSION: concurrent saves are deterministic — both settle, result is valid, no .tmp files left", async () => {
+    const store = new SettingsStore(dir);
+    const settingsA = {
+      instances: [{ instanceId: "codex-1", providerId: "codex" as const, label: "A", credentialsRef: "codex-1", enabled: true }],
+      pollIntervalMinutes: 5,
+      thresholds: [80, 95] as [number, number],
+    };
+    const settingsB = {
+      instances: [{ instanceId: "codex-2", providerId: "codex" as const, label: "B", credentialsRef: "codex-2", enabled: false }],
+      pollIntervalMinutes: 15,
+      thresholds: [70, 90] as [number, number],
+    };
+
+    // Fire two saves concurrently — both must settle without error
+    await expect(Promise.all([store.save(settingsA), store.save(settingsB)])).resolves.toBeDefined();
+
+    // No .tmp files left behind
+    const entries = await fs.readdir(dir);
+    const tmpFiles = entries.filter((e) => e.endsWith(".tmp"));
+    expect(tmpFiles).toHaveLength(0);
+
+    // Result must be a valid settings object (either A or B, not corrupted)
+    const result = await store.load();
+    const validResults = [settingsA, settingsB];
+    expect(validResults).toContainEqual(result);
+  });
 });

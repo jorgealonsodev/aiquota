@@ -5,8 +5,14 @@
 // no direct Electron dependency and no branching logic of its own: schema
 // validation/defaults-on-corruption is already unit-tested via
 // test/core/settings.test.ts.
+//
+// Concurrency: each save() call uses a unique per-invocation temp file
+// (settings.json.<random>.tmp) instead of a single static settings.json.tmp,
+// so two concurrent saves do not clobber each other's temp file. On POSIX
+// fs.rename is atomic; on NTFS same-volume renames are atomic too.
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { randomBytes } from "node:crypto";
 import { parseSettings } from "../../../core/settings";
 import type { Settings } from "../../../shared/domain";
 
@@ -31,11 +37,18 @@ export class SettingsStore {
 
   async save(settings: Settings): Promise<void> {
     await fs.mkdir(this.userDataDir, { recursive: true });
-    // Atomic write via temp file + rename: a concurrent read never sees a
-    // partially-written settings.json (write-then-rename is atomic on POSIX
-    // file systems and Windows NTFS when src/dst are on the same volume).
-    const tmpPath = `${this.filePath}.tmp`;
-    await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), "utf8");
-    await fs.rename(tmpPath, this.filePath);
+    // Unique temp path per invocation prevents concurrent saves from racing on
+    // the same .tmp file (a static path caused the second rename to fail with
+    // ENOENT because the first save already renamed-away the temp file).
+    const uniqueSuffix = randomBytes(6).toString("hex");
+    const tmpPath = path.join(this.userDataDir, `${SETTINGS_FILE_NAME}.${uniqueSuffix}.tmp`);
+    try {
+      await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), "utf8");
+      await fs.rename(tmpPath, this.filePath);
+    } catch (err) {
+      // Clean up orphaned temp file on error (best-effort).
+      await fs.rm(tmpPath, { force: true });
+      throw err;
+    }
   }
 }

@@ -136,4 +136,44 @@ describe("ElectronSecretStore (credential-store spec: Encrypted-at-Rest Storage)
 
     await expect(store.get("codex-1")).rejects.toMatchObject({ kind: "credential-broken" });
   });
+
+  describe("path traversal protection (CRITICAL: credentialsRef must not escape baseDir)", () => {
+    it("get() throws TypedError('credential-broken') for ../ traversal", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.get("../../etc/passwd")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("set() throws TypedError('credential-broken') for ../ traversal", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.set("../../evil", "x")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("delete() throws TypedError('credential-broken') for ../ traversal", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.delete("../sibling/file")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("get() throws TypedError('credential-broken') for absolute path injection", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.get("/etc/passwd")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("set() throws TypedError('credential-broken') for absolute path injection", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.set("/tmp/evil", "x")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("rejects a credentialsRef containing a path separator", async () => {
+      const store = new ElectronSecretStore(dir);
+      await expect(store.get("sub/dir")).rejects.toMatchObject({ kind: "credential-broken" });
+    });
+
+    it("accepts a valid alphanumeric-dash-underscore credentialsRef", async () => {
+      const store = new ElectronSecretStore(dir);
+      // Should not throw — codex-1, claude-personal, openai_api are representative
+      await expect(store.set("codex-1", "secret")).resolves.toBeUndefined();
+      await expect(store.get("codex-1")).resolves.toBe("secret");
+      await expect(store.delete("codex-1")).resolves.toBeUndefined();
+    });
+  });
 });

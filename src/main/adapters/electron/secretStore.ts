@@ -56,11 +56,28 @@ export function maskCookie(value: string): string {
 export class ElectronSecretStore implements SecretStore {
   constructor(private readonly baseDir: string) {}
 
+  /**
+   * Safe filename rule: credentialsRef must consist solely of alphanumeric
+   * characters, hyphens, and underscores. This covers all known
+   * credentialsRef conventions (e.g. "codex-1", "claude-personal",
+   * "openai_api") while preventing ../ traversal, absolute path injection,
+   * and path-separator embedding (/ or \).
+   */
+  private assertSafeRef(credentialsRef: string): void {
+    if (!/^[a-zA-Z0-9_-]+$/.test(credentialsRef)) {
+      throw new TypedError(
+        "credential-broken",
+        `Invalid credentialsRef "${credentialsRef}": only alphanumeric, hyphen, and underscore characters are allowed`,
+      );
+    }
+  }
+
   private pathFor(credentialsRef: string): string {
     return path.join(this.baseDir, `${credentialsRef}.enc`);
   }
 
   async get(credentialsRef: string): Promise<string | null> {
+    this.assertSafeRef(credentialsRef);
     const safeStorage = await loadSafeStorage();
     if (!safeStorage.isEncryptionAvailable()) {
       throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to read credential to avoid plaintext exposure");
@@ -81,6 +98,7 @@ export class ElectronSecretStore implements SecretStore {
   }
 
   async set(credentialsRef: string, value: string): Promise<void> {
+    this.assertSafeRef(credentialsRef);
     const safeStorage = await loadSafeStorage();
     if (!safeStorage.isEncryptionAvailable()) {
       throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to persist credential in plaintext");
@@ -91,6 +109,7 @@ export class ElectronSecretStore implements SecretStore {
   }
 
   async delete(credentialsRef: string): Promise<void> {
+    this.assertSafeRef(credentialsRef);
     await fs.rm(this.pathFor(credentialsRef), { force: true });
   }
 }

@@ -97,5 +97,47 @@ describe("FetchHttpClient (design.md D1 real HttpClient port implementation)", (
       await vi.advanceTimersByTimeAsync(DEFAULT_HTTP_TIMEOUT_MS);
       await assertion;
     });
+
+    it("REGRESSION: rejects with a network TypedError when headers resolve but json() never settles (body stall deadlock)", async () => {
+      // fetch() resolves immediately (headers received) but response.json() hangs forever.
+      // The timeout must still fire and the call to response.json() must reject.
+      const fetchSpy = vi.fn(async (_url: string, options: RequestInit) => ({
+        status: 200,
+        // json() returns a promise that never resolves unless the signal fires
+        json: () =>
+          new Promise<unknown>((_resolve, reject) => {
+            options.signal?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted", "AbortError")),
+            );
+          }),
+      }));
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const client = new FetchHttpClient();
+      const response = await client.get("https://example.com/usage", { timeoutMs: 3000 });
+      const jsonPending = response.json();
+      const assertion = expect(jsonPending).rejects.toMatchObject({ kind: "network" });
+
+      await vi.advanceTimersByTimeAsync(3000);
+      await assertion;
+    });
+
+    it("REGRESSION: no timer leak — timer is cleared after a successful json() read", async () => {
+      // A stall-safe implementation must also clean up the timer on normal completion.
+      const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+      const fetchSpy = vi.fn(async () => ({
+        status: 200,
+        json: async () => ({ result: "ok" }),
+      }));
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const client = new FetchHttpClient();
+      const response = await client.get("https://example.com/usage", { timeoutMs: 5000 });
+      await response.json();
+
+      // clearTimeout must have been called at least once (timer cleanup)
+      expect(clearTimeoutSpy).toHaveBeenCalled();
+      clearTimeoutSpy.mockRestore();
+    });
   });
 });
