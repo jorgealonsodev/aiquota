@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TypedError, WINDOW_KIND } from "../../src/shared/domain";
+import { TypedError, WINDOW_KIND, isValidProviderId } from "../../src/shared/domain";
 import type {
   AuthStatus,
   ProviderInstance,
@@ -132,5 +132,14 @@ describe("shared domain contracts", () => {
     fakeProvider.providerId = "claude";
 
     expect(fakeProvider.providerId).toBe("claude");
+  });
+
+  it("isValidProviderId() accepts only the known provider ids (IPC trust boundary guard)", () => {
+    expect(isValidProviderId("codex")).toBe(true);
+    expect(isValidProviderId("claude")).toBe(true);
+    expect(isValidProviderId("gemini")).toBe(false);
+    expect(isValidProviderId(undefined)).toBe(false);
+    expect(isValidProviderId(null)).toBe(false);
+    expect(isValidProviderId(42)).toBe(false);
   });
 });

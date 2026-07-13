@@ -22,6 +22,59 @@ function loadRenderer(win: BrowserWindow, query?: string): void {
   void win.loadFile(RENDERER_INDEX_PATH, { query: query ? Object.fromEntries(new URLSearchParams(query).entries()) : undefined });
 }
 
+/**
+ * Locks a window that carries the full-privilege preload bridge
+ * (`commonWebPreferences()`) to only ever show the bundled renderer it was
+ * created with. These windows never need to navigate elsewhere or open
+ * child windows, so any attempt to do so (e.g. from a future bug or
+ * injected content) is denied at the Electron level rather than trusted.
+ */
+function hardenPrivilegedWindow(win: BrowserWindow): void {
+  win.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+}
+
+const CLAUDE_LOGIN_ALLOWED_ORIGIN = "https://claude.ai";
+
+/**
+ * Restricts the (preload-less) Claude login window to the claude.ai origin.
+ * `createClaudeWindowIO`'s cookie-polling flow only ever needs
+ * https://claude.ai/login and the pages it renders inline; there is no
+ * OAuth-provider redirect in this flow, so any navigation elsewhere is
+ * denied rather than trusted. Popups are denied too — the flow never opens
+ * one.
+ *
+ * Both `will-navigate` (renderer/user-initiated navigation) and
+ * `will-redirect` (an HTTP 3xx mid-navigation) are guarded identically:
+ * this window holds a real, persistent Claude session cookie
+ * (`session.fromPartition("persist:claude-...")`), so an uncaught
+ * server-side redirect off-origin is the concrete risk being closed here,
+ * not just a user clicking a link. A blocked attempt is logged so a denied
+ * legitimate redirect (e.g. an unexpected CAPTCHA/OAuth step on the live
+ * login page) is distinguishable from a silent network failure.
+ */
+function hardenClaudeLoginWindow(win: BrowserWindow): void {
+  const guardOrigin = (event: Electron.Event, url: string): void => {
+    let origin: string;
+    try {
+      origin = new URL(url).origin;
+    } catch {
+      event.preventDefault();
+      console.error(`[main] Claude login window blocked unparseable navigation: ${url}`);
+      return;
+    }
+    if (origin !== CLAUDE_LOGIN_ALLOWED_ORIGIN) {
+      event.preventDefault();
+      console.error(`[main] Claude login window blocked off-origin navigation to ${origin}`);
+    }
+  };
+  win.webContents.on("will-navigate", guardOrigin);
+  win.webContents.on("will-redirect", guardOrigin);
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+}
+
 export interface WindowManager {
   showPopup(anchor: Tray): void;
   hidePopup(): void;
@@ -63,6 +116,7 @@ export function createWindowManager(): WindowManager {
       popup = null;
     });
 
+    hardenPrivilegedWindow(popup);
     loadRenderer(popup);
     return popup;
   }
@@ -80,6 +134,7 @@ export function createWindowManager(): WindowManager {
       },
     });
 
+    hardenClaudeLoginWindow(win);
     void win.loadURL("https://claude.ai/login");
     return win;
   }
@@ -214,6 +269,7 @@ export function createWindowManager(): WindowManager {
         settingsWindow = null;
       });
 
+      hardenPrivilegedWindow(settingsWindow);
       loadRenderer(settingsWindow, "settings=1");
     },
 

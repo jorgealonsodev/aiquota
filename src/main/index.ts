@@ -21,7 +21,8 @@ import { showThresholdNotification, showReconnectNotification } from "./notifica
 import { IPC_CHANNELS } from "../shared/ipc";
 import type { AppStateSnapshot, IpcInvokeMap } from "../shared/ipc";
 import type { Settings, SettingsInstance } from "../shared/domain";
-import { TypedError } from "../shared/domain";
+import { isValidProviderId, TypedError } from "../shared/domain";
+import { isValidSettingsShape, parseSettings } from "../core/settings";
 
 interface BootstrapContext {
   secretStore: ElectronSecretStore;
@@ -70,6 +71,14 @@ function buildHandlers(ctx: BootstrapContext): IpcInvokeMap {
     },
 
     [IPC_CHANNELS.addAccount]: async (providerId) => {
+      // Defensive runtime check at the IPC trust boundary: `providerId` is
+      // typed as ProviderInstance["providerId"] at compile time, but a
+      // malformed or malicious renderer call could still send anything.
+      // Without this, `ctx.providers[providerId]` below would throw a raw
+      // TypeError on lookup instead of a clear, actionable rejection.
+      if (!isValidProviderId(providerId)) {
+        throw new Error(`addAccount: invalid providerId "${String(providerId)}"`);
+      }
       const id = `${providerId}-${Date.now()}`;
       const newInstance: SettingsInstance = {
         instanceId: id,
@@ -90,8 +99,21 @@ function buildHandlers(ctx: BootstrapContext): IpcInvokeMap {
     [IPC_CHANNELS.getSettings]: async () => ctx.settings,
 
     [IPC_CHANNELS.updateSettings]: async (settings) => {
-      await ctx.settingsStore.save(settings);
-      applySettings(ctx, settings);
+      // Defensive runtime check at the IPC trust boundary, mirroring
+      // parseSettings()'s structural rules (src/core/settings.ts) but
+      // rejecting instead of silently falling back to defaults — malformed
+      // input here must not overwrite a user's valid settings.json.
+      if (!isValidSettingsShape(settings) || !(settings.pollIntervalMinutes > 0)) {
+        throw new Error("updateSettings: malformed Settings payload");
+      }
+      // Shape is valid but values may still be out of bounds (e.g. an
+      // interval above MAX_INTERVAL_MINUTES, a threshold outside (0,100]).
+      // Route through parseSettings() to apply the same clamp/sanitize/
+      // allow-list rules used on file load, instead of persisting and
+      // scheduling unclamped values straight from the renderer.
+      const sanitized = parseSettings(settings);
+      await ctx.settingsStore.save(sanitized);
+      applySettings(ctx, sanitized);
     },
   };
 }

@@ -35,7 +35,14 @@ function isValidSettingsInstance(raw: unknown): raw is SettingsInstance {
   );
 }
 
-function isValidSettingsShape(raw: unknown): raw is Settings {
+/**
+ * Structural shape check for a `Settings` document — same rules
+ * `parseSettings()` uses to decide whether to fall back to defaults.
+ * Exported so the `updateSettings` IPC handler (src/main/index.ts) can
+ * reuse it as a reject-on-invalid guard at the renderer trust boundary,
+ * instead of duplicating the instance/field checks.
+ */
+export function isValidSettingsShape(raw: unknown): raw is Settings {
   if (typeof raw !== "object" || raw === null) return false;
   const candidate = raw as Record<string, unknown>;
 

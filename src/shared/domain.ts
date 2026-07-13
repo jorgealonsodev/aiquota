@@ -51,6 +51,16 @@ export interface ProviderInstance {
   credentialsRef: string;
 }
 
+/**
+ * Runtime type guard for `ProviderInstance["providerId"]`. The union type
+ * above is a compile-time-only contract; anything crossing an untrusted
+ * boundary (e.g. an IPC payload from the renderer) must be checked with
+ * this guard before being used to index a `{ codex, claude }` provider map.
+ */
+export function isValidProviderId(value: unknown): value is ProviderInstance["providerId"] {
+  return value === "codex" || value === "claude";
+}
+
 export interface QuotaProvider {
   readonly providerId: "codex" | "claude";
   configure(instance: ProviderInstance): Promise<void>;
