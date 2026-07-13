@@ -2,6 +2,7 @@
 // thresholds, and a manual org-ID field for Claude instances. The IPC API is
 // injected via props so tests can render without a real `window.electronAPI`.
 import { useEffect, useMemo, useState } from "react";
+import { DEFAULT_SETTINGS, MAX_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES } from "../shared/domain";
 import type { Settings as SettingsType, SettingsInstance } from "../shared/domain";
 import type { ElectronAPI } from "../preload/index";
 
@@ -11,7 +12,11 @@ export interface SettingsProps {
 }
 
 function emptySettings(): SettingsType {
-  return { instances: [], pollIntervalMinutes: 5, thresholds: [80, 95] };
+  return {
+    instances: [...DEFAULT_SETTINGS.instances],
+    pollIntervalMinutes: DEFAULT_SETTINGS.pollIntervalMinutes,
+    thresholds: [...DEFAULT_SETTINGS.thresholds],
+  };
 }
 
 function parseThresholds(raw: string): number[] {
@@ -125,8 +130,8 @@ export function Settings({ api, initialSettings }: SettingsProps): JSX.Element {
           Interval (minutes)
           <input
             type="number"
-            min={1}
-            max={60}
+            min={MIN_INTERVAL_MINUTES}
+            max={MAX_INTERVAL_MINUTES}
             value={settings.pollIntervalMinutes}
             onChange={(event) => handleIntervalChange(event.target.value)}
           />

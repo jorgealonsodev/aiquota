@@ -18,11 +18,22 @@ function formatResetsAt(resetsAt: string | null): string {
   return `resets ${date.toLocaleTimeString()}`;
 }
 
-function ErrorState({ status }: { status: InstanceViewModel["status"] }): JSX.Element {
+function ErrorState({
+  status,
+  label,
+  onReconnect,
+}: {
+  status: InstanceViewModel["status"];
+  label: string;
+  onReconnect: () => void;
+}): JSX.Element {
   if (status === "auth-expired") {
     return (
       <div className="card-error">
-        Session expired. <button>Reconnect</button>
+        Session expired.{" "}
+        <button type="button" onClick={onReconnect} aria-label={`Reconnect ${label}`}>
+          Reconnect
+        </button>
       </div>
     );
   }
@@ -36,6 +47,12 @@ function ErrorState({ status }: { status: InstanceViewModel["status"] }): JSX.El
 }
 
 export function Card({ instance, api }: CardProps): JSX.Element {
+  // Also used as the auth-expired "Reconnect" action below: a successful
+  // scheduler.refresh() un-suspends polling for this instance (see
+  // src/core/scheduler.ts's executePoll) and clears the notify-once
+  // auth-expired marker (src/main/index.ts's scheduleInstance success path,
+  // per src/core/notify.ts's processAuthStatus contract) — the same
+  // underlying recovery action as a normal refresh.
   const handleRefresh = useCallback(() => {
     api?.refresh(instance.instanceId);
   }, [api, instance.instanceId]);
@@ -52,7 +69,7 @@ export function Card({ instance, api }: CardProps): JSX.Element {
       </header>
 
       {instance.status !== "healthy" ? (
-        <ErrorState status={instance.status} />
+        <ErrorState status={instance.status} label={instance.label} onReconnect={handleRefresh} />
       ) : (
         <ul className="card-windows">
           {instance.windows.map((window) => (

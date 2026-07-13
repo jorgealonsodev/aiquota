@@ -2,21 +2,20 @@
 // app-settings + polling-scheduler specs). The electron shell (Phase 3,
 // src/main/adapters/electron/settingsStore.ts) reads/writes
 // userData/settings.json and calls parseSettings() on the raw JSON.
+import { DEFAULT_SETTINGS, MAX_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES } from "../shared/domain";
 import type { Settings, SettingsInstance } from "../shared/domain";
 
-export const MIN_INTERVAL_MINUTES = 1;
-export const MAX_INTERVAL_MINUTES = 60;
+/**
+ * MIN_INTERVAL_MINUTES/MAX_INTERVAL_MINUTES/DEFAULT_SETTINGS are defined in
+ * `src/shared/domain.ts` (the single source of truth also used by the
+ * renderer settings form) and re-exported here for backward-compatible
+ * imports from `./settings`.
+ */
+export { DEFAULT_SETTINGS, MAX_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES };
 
 /** Notification threshold bounds: exclusive 0, inclusive 100 (a percentage). */
 const MIN_THRESHOLD = 0;
 const MAX_THRESHOLD = 100;
-
-/** Default notification thresholds per the app-settings spec: number[] defaulting to [80, 95]. */
-export const DEFAULT_SETTINGS: Settings = {
-  instances: [],
-  pollIntervalMinutes: 5,
-  thresholds: [80, 95],
-};
 
 /** Clamps a poll interval to the polling-scheduler spec's 1-60 minute bounds. */
 export function clampInterval(minutes: number): number {

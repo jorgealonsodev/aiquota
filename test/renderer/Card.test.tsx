@@ -44,6 +44,12 @@ describe("Card (quota-popup spec)", () => {
     expect(html).toContain("Reconnect");
   });
 
+  it("wires the Reconnect button to this instance via aria-label (renderToStaticMarkup cannot fire onClick, so this asserts the button is bound to the instance rather than a dead/generic control)", () => {
+    const html = renderToStaticMarkup(<Card instance={instance({ status: "auth-expired", label: "Claude Work", windows: [] })} />);
+
+    expect(html).toContain('aria-label="Reconnect Claude Work"');
+  });
+
   it("renders a network error state", () => {
     const html = renderToStaticMarkup(<Card instance={instance({ status: "network", windows: [] })} />);
 

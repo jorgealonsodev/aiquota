@@ -1,6 +1,6 @@
 // Typed IPC channel map (design D3). Renderer -> main uses `invoke`;
 // main -> renderer uses a one-way push on `state:update`.
-import type { ProviderInstance, QuotaWindow, Settings } from "./domain";
+import type { InstanceSnapshot, InstanceStatus, ProviderInstance, Settings } from "./domain";
 
 export const IPC_CHANNELS = {
   refresh: "refresh",
@@ -16,18 +16,13 @@ export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 /**
  * View-model for a single provider instance as pushed to the renderer on
- * `state:update`. Mirrors `InstanceSnapshot` from `src/core/aggregate.ts`
- * (which lives in core and therefore cannot be imported by shared).
+ * `state:update`. Aliases `InstanceStatus`/`InstanceSnapshot` from
+ * `src/shared/domain.ts` — the single source of truth also used by
+ * `src/core/aggregate.ts` — rather than duplicating the shape.
  */
-export type InstanceViewModelStatus = "healthy" | "auth-expired" | "network" | "provider-broken" | "unconfigured";
+export type InstanceViewModelStatus = InstanceStatus;
 
-export interface InstanceViewModel {
-  instanceId: string;
-  label: string;
-  enabled: boolean;
-  status: InstanceViewModelStatus;
-  windows: QuotaWindow[];
-}
+export type InstanceViewModel = InstanceSnapshot;
 
 /**
  * Authoritative shape of the state pushed to the renderer on `state:update`.

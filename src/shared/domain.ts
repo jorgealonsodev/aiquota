@@ -70,3 +70,33 @@ export interface Settings {
   pollIntervalMinutes: number;
   thresholds: number[];
 }
+
+/** Polling-scheduler spec's 1-60 minute bounds. Shared by core/settings.ts (validation) and the renderer settings form (input bounds). */
+export const MIN_INTERVAL_MINUTES = 1;
+export const MAX_INTERVAL_MINUTES = 60;
+
+/** Default settings per the app-settings spec. Shared by core/settings.ts (validation fallback) and the renderer settings form (initial state). */
+export const DEFAULT_SETTINGS: Settings = {
+  instances: [],
+  pollIntervalMinutes: 5,
+  thresholds: [80, 95],
+};
+
+/**
+ * Status of a single provider instance as seen by the tray/popup, folding
+ * together QuotaProvider.authStatus() ("healthy" | "auth-expired" |
+ * "unconfigured") and TypedError.kind ("network" | "provider-broken") into
+ * one field. Single source of truth for both `src/core/aggregate.ts`
+ * (tray aggregation) and `src/shared/ipc.ts` (renderer view-model) — see
+ * design.md "aggregate() Tray Contract".
+ */
+export type InstanceStatus = "healthy" | "auth-expired" | "network" | "provider-broken" | "unconfigured";
+
+export interface InstanceSnapshot {
+  instanceId: string;
+  label: string;
+  enabled: boolean;
+  status: InstanceStatus;
+  /** Only meaningful when status is "healthy"; empty otherwise. */
+  windows: QuotaWindow[];
+}

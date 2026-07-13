@@ -2,24 +2,15 @@
 // Zero Electron imports: takes a list of per-instance snapshots and derives
 // the tray icon color + tooltip. The Electron shell (Phase 4) is responsible
 // for building InstanceSnapshot[] from the StateStore and painting the icon.
-import type { QuotaWindow } from "../shared/domain";
+import type { InstanceSnapshot, InstanceStatus, QuotaWindow } from "../shared/domain";
 
 /**
- * Status of a single provider instance as seen by the tray, folding together
- * QuotaProvider.authStatus() ("healthy" | "auth-expired" | "unconfigured")
- * and TypedError.kind ("network" | "provider-broken") into one field so
- * aggregate() has a single source of truth for "is this instance usable".
+ * InstanceStatus/InstanceSnapshot are defined in `src/shared/domain.ts` (the
+ * single source of truth also used by `src/shared/ipc.ts`'s renderer
+ * view-model) and re-exported here for backward-compatible imports from
+ * `./aggregate`.
  */
-export type InstanceStatus = "healthy" | "auth-expired" | "network" | "provider-broken" | "unconfigured";
-
-export interface InstanceSnapshot {
-  instanceId: string;
-  label: string;
-  enabled: boolean;
-  status: InstanceStatus;
-  /** Only meaningful when status is "healthy"; empty otherwise. */
-  windows: QuotaWindow[];
-}
+export type { InstanceStatus, InstanceSnapshot };
 
 export type TrayColor = "green" | "amber" | "red" | "gray";
 

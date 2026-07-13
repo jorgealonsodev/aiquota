@@ -1,7 +1,7 @@
 // Electron main process bootstrap (task 4.1). Wires the domain core
 // (scheduler, store, notify, providers) to Electron adapters and the shell
 // (tray, windows, IPC, notifications). Shell code; covered by manual QA.
-import { app } from "electron";
+import { app, dialog } from "electron";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { NodeClock } from "./adapters/electron/clock";
@@ -125,12 +125,19 @@ function applySettings(ctx: BootstrapContext, next: Settings): void {
       void ctx.providers[instance.providerId]
         .configure(instance)
         .then(() => {
+          // The user may have removed this instance while configure() was
+          // still pending; if so, do not resurrect it into the scheduler —
+          // there is no more UI control to stop it.
+          if (!ctx.store.get(instance.instanceId)) {
+            return;
+          }
           if (instance.enabled) {
             scheduleInstance(ctx, instance);
           }
           ctx.pushState();
         })
         .catch((err) => {
+          console.error(`[main] configure failed for instance ${instance.instanceId}`, err);
           const typed = attachInstanceId(err, instance.instanceId);
           ctx.store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
           ctx.pushState();
@@ -145,12 +152,26 @@ function applySettings(ctx: BootstrapContext, next: Settings): void {
     const prevInstance = previousById.get(instance.instanceId);
     if (instance.providerId === "claude" && prevInstance?.orgId !== instance.orgId) {
       ctx.scheduler.cancel(instance.instanceId);
-      void ctx.providers.claude.configure(instance).then(() => {
-        if (instance.enabled) {
-          scheduleInstance(ctx, instance);
-        }
-        ctx.pushState();
-      });
+      void ctx.providers.claude
+        .configure(instance)
+        .then(() => {
+          // The user may have removed this instance while configure() was
+          // still pending; if so, do not resurrect it into the scheduler —
+          // there is no more UI control to stop it.
+          if (!ctx.store.get(instance.instanceId)) {
+            return;
+          }
+          if (instance.enabled) {
+            scheduleInstance(ctx, instance);
+          }
+          ctx.pushState();
+        })
+        .catch((err) => {
+          console.error(`[main] claude reconfigure failed for instance ${instance.instanceId}`, err);
+          const typed = attachInstanceId(err, instance.instanceId);
+          ctx.store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
+          ctx.pushState();
+        });
       continue;
     }
 
@@ -176,6 +197,11 @@ function scheduleInstance(ctx: BootstrapContext, instance: SettingsInstance): vo
         windows,
         fetchedAt,
       });
+      // Clear the auth-expired transition marker on recovery so a later
+      // auth-expired failure re-notifies (see notify.ts's processAuthStatus
+      // contract). The catch branch below is the only other caller; without
+      // this, lastAuthStatus stays pinned to "auth-expired" forever.
+      ctx.notifier.processAuthStatus(instance.instanceId, "healthy");
       for (const window of windows) {
         const events = ctx.notifier.processWindow(
           { instanceId: instance.instanceId, kind: window.kind, utilization: window.utilization, resetsAt: window.resetsAt },
@@ -186,6 +212,7 @@ function scheduleInstance(ctx: BootstrapContext, instance: SettingsInstance): vo
         }
       }
     } catch (err) {
+      console.error(`[main] poll failed for instance ${instance.instanceId}`, err);
       const typed = attachInstanceId(err, instance.instanceId);
       const status = typed.kind === "auth-expired" ? "auth-expired" : typed.kind === "network" ? "network" : "provider-broken";
       ctx.store.update(instance.instanceId, { status, fetchedAt });
@@ -289,6 +316,7 @@ async function bootstrap(): Promise<void> {
     await providers[instance.providerId]
       .configure(instance)
       .catch((err) => {
+        console.error(`[main] initial configure failed for instance ${instance.instanceId}`, err);
         const typed = attachInstanceId(err, instance.instanceId);
         store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
       });
@@ -312,4 +340,9 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-void bootstrap();
+void bootstrap().catch((err) => {
+  console.error("[main] bootstrap failed", err);
+  const message = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  dialog.showErrorBox("AIQuota failed to start", message);
+  app.quit();
+});
