@@ -74,9 +74,14 @@ Chain strategy: pending
 - [x] 4.4 `src/main/ipc.ts` — wire `shared/ipc.ts` channels to core/store/adapters. QA: manually invoke each channel.
 - [x] 4.5 `src/main/notifications.ts` — native `Notification` from `NotifyEngine` events + reconnect notification. QA: manual threshold cross + reconnect trigger.
 - [x] 4.6 `src/preload/index.ts` — `contextBridge`, typed IPC only, no node exposure (D2 security).
-- [x] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders card list.
-- [x] 4.8 `src/renderer/Card.tsx` — per-window progress, reset countdown, last-update, refresh button, error/reconnect state (quota-popup spec).
+- [x] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders one card per instance passing the shared `isVisibleInstance()` predicate (`src/shared/domain.ts`; disabled/unconfigured instances render no card, error-state instances still render — quota-popup spec "Per-Account Card Rendering", app-settings spec "Provider Enable/Disable" + "Unconfigured Provider Handling").
+- [x] 4.8 `src/renderer/Card.tsx` — per-window progress; live reset countdown (60s-granularity ticking clock driving pure `formatCountdown()`, unit-tested in `test/renderer/cardFormatting.test.ts`); last-update timestamp (pure `formatLastUpdated()`, unit-tested, backed by `InstanceSnapshot.fetchedAt` threaded through `src/core/store.ts`); refresh button; error/reconnect state (quota-popup spec).
 - [x] 4.9 `src/renderer/Settings.tsx` — provider toggles, labels, interval, thresholds, manual org-ID field (app-settings spec).
+
+## PR4 Verify-Gate Critical Fixes (autonomous commit batch)
+- [x] V4.1 Live reset countdown: replaced the static absolute-clock `formatResetsAt()` in `src/renderer/Card.tsx` with pure `formatCountdown(resetsAt, now)` plus a 60s `setInterval` re-render tick, matching quota-popup spec's "Countdown reflects remaining time" scenario ("~1h 30m remaining, updating as time passes"). Unit-tested in `test/renderer/cardFormatting.test.ts` (hours+minutes, under an hour, expired, null).
+- [x] V4.2 Last-update timestamp: added `InstanceSnapshot.fetchedAt?: number` (`src/shared/domain.ts`), threaded it through `src/core/store.ts`'s `register()`/`update()` (previously tracked only internally for staleness rejection, never exposed), and rendered it in `src/renderer/Card.tsx` via pure `formatLastUpdated()`, matching quota-popup spec's "Last update shown" scenario ("last updated 3 minutes ago"). Unit-tested in `test/core/store.test.ts` and `test/renderer/cardFormatting.test.ts`.
+- [x] V4.3 Popup visibility filter: added shared `isVisibleInstance()` (`src/shared/domain.ts`, `enabled && status !== "unconfigured"`) reused by `src/core/aggregate.ts` (replacing its private `isTooltipVisible`) and `src/renderer/App.tsx`, so disabled/unconfigured instances render no card while error-state instances still render a reconnect/error card — matches app-settings spec "Provider Enable/Disable" + "Unconfigured Provider Handling" and quota-popup spec "Per-Account Card Rendering" + "Error and Reconnect State Rendering". Tested in `test/shared/domain.test.ts` and `test/renderer/App.test.tsx`.
 
 ## Phase 5: Packaging (PR5, depends on Phase 4)
 - [ ] 5.1 `electron-builder.yml` — AppImage/.deb (Linux), NSIS (Windows), no macOS (packaging spec).

@@ -109,4 +109,27 @@ export interface InstanceSnapshot {
   status: InstanceStatus;
   /** Only meaningful when status is "healthy"; empty otherwise. */
   windows: QuotaWindow[];
+  /**
+   * Epoch ms (Clock.now()) of this instance's last completed fetch attempt
+   * (success or failure), or undefined if it has never been fetched.
+   * Rendered by the popup as a "last updated" indicator (quota-popup spec,
+   * "Last Update Timestamp and Manual Refresh"). Threaded through
+   * `src/core/store.ts` from `src/main/index.ts`'s `scheduleInstance`.
+   */
+  fetchedAt?: number;
+}
+
+/**
+ * Shared visibility rule for the tray/popup surfaces: an instance is only
+ * shown when it is enabled AND configured (app-settings spec, "Provider
+ * Enable/Disable" and "Unconfigured Provider Handling"). Instances in an
+ * error state (auth-expired/network/provider-broken) are still visible —
+ * they render an error/reconnect card instead of disappearing (quota-popup
+ * spec, "Error and Reconnect State Rendering"). Single source of truth for
+ * both `src/core/aggregate.ts` (tray color/tooltip) and
+ * `src/renderer/App.tsx` (popup card list) so the two surfaces never
+ * disagree about which instances are shown.
+ */
+export function isVisibleInstance(snapshot: Pick<InstanceSnapshot, "enabled" | "status">): boolean {
+  return snapshot.enabled && snapshot.status !== "unconfigured";
 }

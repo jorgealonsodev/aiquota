@@ -3,6 +3,7 @@
 // the tray icon color + tooltip. The Electron shell (Phase 4) is responsible
 // for building InstanceSnapshot[] from the StateStore and painting the icon.
 import type { InstanceSnapshot, InstanceStatus, QuotaWindow } from "../shared/domain";
+import { isVisibleInstance } from "../shared/domain";
 
 /**
  * InstanceStatus/InstanceSnapshot are defined in `src/shared/domain.ts` (the
@@ -22,10 +23,6 @@ export interface TrayState {
 /** Amber lower bound (inclusive) and red lower bound (exclusive), per tray-status spec. */
 const AMBER_MIN_UTILIZATION = 70;
 const RED_MIN_UTILIZATION = 90;
-
-function isTooltipVisible(snapshot: InstanceSnapshot): boolean {
-  return snapshot.enabled && snapshot.status !== "unconfigured";
-}
 
 function isHealthy(snapshot: InstanceSnapshot): boolean {
   return snapshot.status === "healthy";
@@ -49,7 +46,7 @@ function tooltipSegment(snapshot: InstanceSnapshot): string {
 }
 
 export function aggregate(snapshots: InstanceSnapshot[]): TrayState {
-  const visible = snapshots.filter(isTooltipVisible);
+  const visible = snapshots.filter(isVisibleInstance);
   const healthy = visible.filter(isHealthy);
 
   const tooltip = visible.map(tooltipSegment).join(" · ");

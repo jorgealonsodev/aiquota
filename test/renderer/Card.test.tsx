@@ -73,4 +73,27 @@ describe("Card (quota-popup spec)", () => {
 
     expect(html).toContain("Refresh");
   });
+
+  it("shows a live reset countdown instead of an absolute clock time (quota-popup spec: Countdown reflects remaining time)", () => {
+    const now = new Date("2026-07-13T12:00:00.000Z");
+    const resetsAt = new Date(now.getTime() + 90 * 60 * 1000).toISOString();
+    const html = renderToStaticMarkup(
+      <Card
+        instance={instance({
+          windows: [{ kind: "five_hour", label: "Last 5 hours", utilization: 50, resetsAt }],
+        })}
+        now={now}
+      />,
+    );
+
+    expect(html).toContain("1h 30m remaining");
+  });
+
+  it("shows the last-updated indicator using the injected clock (quota-popup spec: Last update shown)", () => {
+    const now = new Date("2026-07-13T12:00:00.000Z");
+    const fetchedAt = now.getTime() - 3 * 60 * 1000;
+    const html = renderToStaticMarkup(<Card instance={instance({ fetchedAt })} now={now} />);
+
+    expect(html).toContain("last updated 3 minutes ago");
+  });
 });
