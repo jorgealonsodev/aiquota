@@ -1,7 +1,7 @@
 // Electron main process bootstrap (task 4.1). Wires the domain core
 // (scheduler, store, notify, providers) to Electron adapters and the shell
 // (tray, windows, IPC, notifications). Shell code; covered by manual QA.
-import { app, dialog } from "electron";
+import { app, dialog, session } from "electron";
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { NodeClock } from "./adapters/electron/clock";
@@ -128,9 +128,27 @@ function applySettings(ctx: BootstrapContext, next: Settings): void {
   // Cancel removed instances.
   for (const id of previousById.keys()) {
     if (!nextById.has(id)) {
+      const removed = previousById.get(id);
       ctx.scheduler.cancel(id);
       ctx.store.remove(id);
       ctx.notifier.remove(id);
+      // Secure Credential Deletion (credential-store spec): removing an
+      // instance must actually erase its stored secret and, for Claude
+      // instances, the persisted login-session cookies -- otherwise the
+      // credential silently survives on disk after the account is removed.
+      if (removed) {
+        void ctx.secretStore.delete(removed.credentialsRef).catch((err) => {
+          console.error(`[main] failed to delete credential for removed instance ${id}`, err);
+        });
+        if (removed.providerId === "claude") {
+          void session
+            .fromPartition(`persist:claude-${id}`)
+            .clearStorageData()
+            .catch((err) => {
+              console.error(`[main] failed to clear session partition for removed instance ${id}`, err);
+            });
+        }
+      }
     }
   }
 
