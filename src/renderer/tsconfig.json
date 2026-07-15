@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/renderer-tsc",
+    "rootDir": ".",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx"
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // global.d.ts imports the ElectronAPI type from ../preload/index (needed to
+  // type window.electronAPI) — that project must be a declared reference or
+  // `tsc -b` pulls preload's source into the renderer program without going
+  // through preload's own outDir, incorrectly writing compiled output next to
+  // src/preload/index.ts on a clean rebuild (found during packaging apply).
+  "references": [{ "path": "../shared" }, { "path": "../preload" }]
+}

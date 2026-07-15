@@ -1,0 +1,16 @@
+{
+  // Deliberately CommonJS even though package.json sets "type": "module":
+  // Electron's main process loads its entry point as CJS, and native addons
+  // used by future adapters (safeStorage/tray bindings) assume require().
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/main",
+    "rootDir": ".",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../shared" }, { "path": "../core" }]
+}
