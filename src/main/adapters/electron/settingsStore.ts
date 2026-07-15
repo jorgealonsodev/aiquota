@@ -19,6 +19,10 @@ import type { Settings } from "../../../shared/domain";
 const SETTINGS_FILE_NAME = "settings.json";
 
 export class SettingsStore {
+  /** Promise chain that serializes concurrent save() calls so an older
+   * invocation cannot overwrite a newer one. */
+  private saveChain: Promise<void> = Promise.resolve();
+
   constructor(private readonly userDataDir: string) {}
 
   private get filePath(): string {
@@ -36,19 +40,25 @@ export class SettingsStore {
   }
 
   async save(settings: Settings): Promise<void> {
-    await fs.mkdir(this.userDataDir, { recursive: true });
-    // Unique temp path per invocation prevents concurrent saves from racing on
-    // the same .tmp file (a static path caused the second rename to fail with
-    // ENOENT because the first save already renamed-away the temp file).
-    const uniqueSuffix = randomBytes(6).toString("hex");
-    const tmpPath = path.join(this.userDataDir, `${SETTINGS_FILE_NAME}.${uniqueSuffix}.tmp`);
-    try {
-      await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), "utf8");
-      await fs.rename(tmpPath, this.filePath);
-    } catch (err) {
-      // Clean up orphaned temp file on error (best-effort).
-      await fs.rm(tmpPath, { force: true });
-      throw err;
-    }
+    // Serialize saves: enqueue behind the previous save so they execute in
+    // invocation order and an older, slower save cannot overwrite a newer one.
+    const pending = this.saveChain.then(async () => {
+      await fs.mkdir(this.userDataDir, { recursive: true });
+      // Unique temp path per invocation prevents concurrent saves from racing on
+      // the same .tmp file (a static path caused the second rename to fail with
+      // ENOENT because the first save already renamed-away the temp file).
+      const uniqueSuffix = randomBytes(6).toString("hex");
+      const tmpPath = path.join(this.userDataDir, `${SETTINGS_FILE_NAME}.${uniqueSuffix}.tmp`);
+      try {
+        await fs.writeFile(tmpPath, JSON.stringify(settings, null, 2), "utf8");
+        await fs.rename(tmpPath, this.filePath);
+      } catch (err) {
+        // Clean up orphaned temp file on error (best-effort).
+        await fs.rm(tmpPath, { force: true });
+        throw err;
+      }
+    });
+    this.saveChain = pending.catch(() => undefined);
+    return pending;
   }
 }

@@ -61,16 +61,27 @@ Chain strategy: pending
 - [x] 3.6 `src/main/adapters/electron/secretStore.ts` — `safeStorage` get/set/delete keyed by `credentialsRef`, `maskCookie()` (credential-store spec). Both `maskCookie()` and `ElectronSecretStore` operations (get/set/delete, path traversal guard, missing-key fallback, safeStorage-unavailable, nested dir creation) are unit-tested via a mocked `electron` module (lazy-import avoids the binary-download side effect at module load — see apply-progress).
 - [x] 3.7 `src/main/adapters/electron/settingsStore.ts` — read/write `userData/settings.json` via `src/core/settings.ts` (unit-tested against a real temp directory; no Electron dependency, `userDataDir` is injected by the caller).
 
+## Final-Gate Critical Fixes (PR3 follow-up, autonomous commit batch)
+- [x] F.1 Reject Electron `safeStorage` Linux `basic_text` backend in `src/main/adapters/electron/secretStore.ts`; throw `TypedError("credential-broken", ...)` when `getSelectedStorageBackend() === "basic_text"`.
+- [x] F.2 Serialize concurrent `SettingsStore.save()` calls in `src/main/adapters/electron/settingsStore.ts` via a promise chain so an older invocation cannot overwrite a newer one.
+- [x] F.3 Harden `src/core/providers/codex.ts` normalization: finite `used_percent` in [0, 100]; finite positive `reset_at`; skip non-object `additional_rate_limits` entries; normalize `authReader.read()` rejections to `TypedError("auth-expired", ...)`.
+- [x] F.4 Normalize `ElectronSecretStore.set()`/`delete()` failures (encryptString, mkdir, writeFile, rm) to `TypedError("credential-broken", ...)`.
+
 ## Phase 4: Electron Shell (untested, manual QA) + Renderer (PR4, depends on Phase 2–3)
-- [ ] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
-- [ ] 4.2 `src/main/tray.ts` — icon color from `aggregate()`, tooltip, context menu Open/Refresh/Settings/Quit (tray-status spec). QA: manual click-through each menu item.
-- [ ] 4.3 `src/main/windows.ts` — frameless popup (blur-close, anchored), Settings window, Claude login `BrowserWindow` per `session.fromPartition('persist:claude-{id}')`, hidden fetch window. QA: manual open/close/login flow, popup blur-close.
-- [ ] 4.4 `src/main/ipc.ts` — wire `shared/ipc.ts` channels to core/store/adapters. QA: manually invoke each channel.
-- [ ] 4.5 `src/main/notifications.ts` — native `Notification` from `NotifyEngine` events + reconnect notification. QA: manual threshold cross + reconnect trigger.
-- [ ] 4.6 `src/preload/index.ts` — `contextBridge`, typed IPC only, no node exposure (D2 security).
-- [ ] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders card list.
-- [ ] 4.8 `src/renderer/Card.tsx` — per-window progress, reset countdown, last-update, refresh button, error/reconnect state (quota-popup spec).
-- [ ] 4.9 `src/renderer/Settings.tsx` — provider toggles, labels, interval, thresholds, manual org-ID field (app-settings spec).
+- [x] 4.1 `src/main/index.ts` — bootstrap, wires scheduler/store/adapters. QA: app launches, tray visible.
+- [x] 4.2 `src/main/tray.ts` — icon color from `aggregate()`, tooltip, context menu Open/Refresh/Settings/Quit (tray-status spec). QA: manual click-through each menu item.
+- [x] 4.3 `src/main/windows.ts` — frameless popup (blur-close, anchored), Settings window, Claude login `BrowserWindow` per `session.fromPartition('persist:claude-{id}')`, hidden fetch window. QA: manual open/close/login flow, popup blur-close.
+- [x] 4.4 `src/main/ipc.ts` — wire `shared/ipc.ts` channels to core/store/adapters. QA: manually invoke each channel.
+- [x] 4.5 `src/main/notifications.ts` — native `Notification` from `NotifyEngine` events + reconnect notification. QA: manual threshold cross + reconnect trigger.
+- [x] 4.6 `src/preload/index.ts` — `contextBridge`, typed IPC only, no node exposure (D2 security).
+- [x] 4.7 `src/renderer/App.tsx` — subscribes `state:update`, renders one card per instance passing the shared `isVisibleInstance()` predicate (`src/shared/domain.ts`; disabled/unconfigured instances render no card, error-state instances still render — quota-popup spec "Per-Account Card Rendering", app-settings spec "Provider Enable/Disable" + "Unconfigured Provider Handling").
+- [x] 4.8 `src/renderer/Card.tsx` — per-window progress; live reset countdown (60s-granularity ticking clock driving pure `formatCountdown()`, unit-tested in `test/renderer/cardFormatting.test.ts`); last-update timestamp (pure `formatLastUpdated()`, unit-tested, backed by `InstanceSnapshot.fetchedAt` threaded through `src/core/store.ts`); refresh button; error/reconnect state (quota-popup spec).
+- [x] 4.9 `src/renderer/Settings.tsx` — provider toggles, labels, interval, thresholds, manual org-ID field (app-settings spec).
+
+## PR4 Verify-Gate Critical Fixes (autonomous commit batch)
+- [x] V4.1 Live reset countdown: replaced the static absolute-clock `formatResetsAt()` in `src/renderer/Card.tsx` with pure `formatCountdown(resetsAt, now)` plus a 60s `setInterval` re-render tick, matching quota-popup spec's "Countdown reflects remaining time" scenario ("~1h 30m remaining, updating as time passes"). Unit-tested in `test/renderer/cardFormatting.test.ts` (hours+minutes, under an hour, expired, null).
+- [x] V4.2 Last-update timestamp: added `InstanceSnapshot.fetchedAt?: number` (`src/shared/domain.ts`), threaded it through `src/core/store.ts`'s `register()`/`update()` (previously tracked only internally for staleness rejection, never exposed), and rendered it in `src/renderer/Card.tsx` via pure `formatLastUpdated()`, matching quota-popup spec's "Last update shown" scenario ("last updated 3 minutes ago"). Unit-tested in `test/core/store.test.ts` and `test/renderer/cardFormatting.test.ts`.
+- [x] V4.3 Popup visibility filter: added shared `isVisibleInstance()` (`src/shared/domain.ts`, `enabled && status !== "unconfigured"`) reused by `src/core/aggregate.ts` (replacing its private `isTooltipVisible`) and `src/renderer/App.tsx`, so disabled/unconfigured instances render no card while error-state instances still render a reconnect/error card — matches app-settings spec "Provider Enable/Disable" + "Unconfigured Provider Handling" and quota-popup spec "Per-Account Card Rendering" + "Error and Reconnect State Rendering". Tested in `test/shared/domain.test.ts` and `test/renderer/App.test.tsx`.
 
 ## Phase 5: Packaging (PR5, depends on Phase 4)
 - [ ] 5.1 `electron-builder.yml` — AppImage/.deb (Linux), NSIS (Windows), no macOS (packaging spec).

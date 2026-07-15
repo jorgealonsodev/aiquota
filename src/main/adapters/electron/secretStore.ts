@@ -76,9 +76,19 @@ export class ElectronSecretStore implements SecretStore {
     return path.join(this.baseDir, `${credentialsRef}.enc`);
   }
 
+  private assertStorageBackend(safeStorage: SafeStorage): void {
+    // Electron on Linux can report encryption available while using a
+    // hardcoded plaintext password (basic_text backend). Fail closed.
+    const backend = (safeStorage as unknown as Record<string, unknown>).getSelectedStorageBackend;
+    if (typeof backend === "function" && backend.call(safeStorage) === "basic_text") {
+      throw new TypedError("credential-broken", "Electron safeStorage is using the basic_text backend; refusing to persist or read credentials in plaintext");
+    }
+  }
+
   async get(credentialsRef: string): Promise<string | null> {
     this.assertSafeRef(credentialsRef);
     const safeStorage = await loadSafeStorage();
+    this.assertStorageBackend(safeStorage);
     if (!safeStorage.isEncryptionAvailable()) {
       throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to read credential to avoid plaintext exposure");
     }
@@ -100,17 +110,31 @@ export class ElectronSecretStore implements SecretStore {
   async set(credentialsRef: string, value: string): Promise<void> {
     this.assertSafeRef(credentialsRef);
     const safeStorage = await loadSafeStorage();
+    this.assertStorageBackend(safeStorage);
     if (!safeStorage.isEncryptionAvailable()) {
       throw new TypedError("credential-broken", "OS-level encryption is not available; refusing to persist credential in plaintext");
     }
-    const encrypted = safeStorage.encryptString(value);
-    await fs.mkdir(this.baseDir, { recursive: true, mode: 0o700 });
-    await fs.writeFile(this.pathFor(credentialsRef), encrypted, { mode: 0o600 });
+    let encrypted: Buffer;
+    try {
+      encrypted = safeStorage.encryptString(value);
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to encrypt credential: ${(err as Error).message}`);
+    }
+    try {
+      await fs.mkdir(this.baseDir, { recursive: true, mode: 0o700 });
+      await fs.writeFile(this.pathFor(credentialsRef), encrypted, { mode: 0o600 });
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to persist credential: ${(err as Error).message}`);
+    }
   }
 
   async delete(credentialsRef: string): Promise<void> {
     this.assertSafeRef(credentialsRef);
-    await fs.rm(this.pathFor(credentialsRef), { force: true });
+    try {
+      await fs.rm(this.pathFor(credentialsRef), { force: true });
+    } catch (err) {
+      throw new TypedError("credential-broken", `Failed to delete credential: ${(err as Error).message}`);
+    }
   }
 }
 

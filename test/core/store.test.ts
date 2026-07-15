@@ -121,4 +121,21 @@ describe("StateStore (design.md Data Flow: StateStore -> aggregate())", () => {
 
     expect(store.get("codex-1")?.windows[0].utilization).toBe(90);
   });
+
+  it("exposes fetchedAt on the snapshot after an update carries one (quota-popup spec: Last Update Timestamp)", () => {
+    const store = new StateStore();
+    store.register("codex-1", { status: "healthy" });
+
+    store.update("codex-1", { fetchedAt: 12345, windows: [] });
+
+    expect(store.get("codex-1")?.fetchedAt).toBe(12345);
+  });
+
+  it("defaults fetchedAt to undefined for a freshly registered instance that has never been fetched", () => {
+    const store = new StateStore();
+
+    const snapshot = store.register("codex-1", { label: "Codex" });
+
+    expect(snapshot.fetchedAt).toBeUndefined();
+  });
 });

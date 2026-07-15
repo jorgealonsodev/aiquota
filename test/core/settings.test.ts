@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { clampInterval, DEFAULT_SETTINGS, MAX_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES, parseSettings } from "../../src/core/settings";
+import {
+  clampInterval,
+  DEFAULT_SETTINGS,
+  isValidSettingsShape,
+  MAX_INTERVAL_MINUTES,
+  MIN_INTERVAL_MINUTES,
+  parseSettings,
+} from "../../src/core/settings";
 
 describe("settings schema validation (app-settings spec)", () => {
   it("passes through a well-formed settings document unchanged", () => {
@@ -115,5 +122,29 @@ describe("settings schema validation (app-settings spec)", () => {
     const raw = { instances: [], pollIntervalMinutes: 5, thresholds: [80, 950] };
 
     expect(parseSettings(raw).thresholds).toEqual([80]);
+  });
+
+  it("isValidSettingsShape() accepts a well-formed document (reused as an IPC reject-on-invalid guard)", () => {
+    const raw = {
+      instances: [{ instanceId: "codex-1", providerId: "codex", label: "Personal", credentialsRef: "codex-1", enabled: true }],
+      pollIntervalMinutes: 10,
+      thresholds: [80, 95],
+    };
+
+    expect(isValidSettingsShape(raw)).toBe(true);
+  });
+
+  it("isValidSettingsShape() rejects an unknown providerId, non-array instances/thresholds, and non-object input", () => {
+    expect(
+      isValidSettingsShape({
+        instances: [{ instanceId: "x-1", providerId: "unknown", label: "X", credentialsRef: "x-1", enabled: true }],
+        pollIntervalMinutes: 5,
+        thresholds: [80],
+      }),
+    ).toBe(false);
+    expect(isValidSettingsShape({ instances: "not-an-array", pollIntervalMinutes: 5, thresholds: [80] })).toBe(false);
+    expect(isValidSettingsShape({ instances: [], pollIntervalMinutes: 5, thresholds: "not-an-array" })).toBe(false);
+    expect(isValidSettingsShape(null)).toBe(false);
+    expect(isValidSettingsShape("corrupted")).toBe(false);
   });
 });

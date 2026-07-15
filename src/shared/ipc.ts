@@ -1,6 +1,6 @@
 // Typed IPC channel map (design D3). Renderer -> main uses `invoke`;
 // main -> renderer uses a one-way push on `state:update`.
-import type { ProviderInstance, Settings } from "./domain";
+import type { InstanceSnapshot, InstanceStatus, ProviderInstance, Settings } from "./domain";
 
 export const IPC_CHANNELS = {
   refresh: "refresh",
@@ -15,13 +15,24 @@ export const IPC_CHANNELS = {
 export type IpcChannelName = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 /**
- * Provisional shape of the state pushed to the renderer on `state:update`.
- * Phase 2's `src/core/aggregate.ts` defines the authoritative TrayState;
- * this shape will be refined (not widened) once that lands.
+ * View-model for a single provider instance as pushed to the renderer on
+ * `state:update`. Aliases `InstanceStatus`/`InstanceSnapshot` from
+ * `src/shared/domain.ts` — the single source of truth also used by
+ * `src/core/aggregate.ts` — rather than duplicating the shape.
+ */
+export type InstanceViewModelStatus = InstanceStatus;
+
+export type InstanceViewModel = InstanceSnapshot;
+
+/**
+ * Authoritative shape of the state pushed to the renderer on `state:update`.
+ * Extends the tray color/tooltip contract from `src/core/aggregate.ts` with
+ * the per-instance view-models the popup needs to render cards.
  */
 export interface AppStateSnapshot {
   color: "green" | "amber" | "red" | "gray";
-  instances: unknown[];
+  tooltip: string;
+  instances: InstanceViewModel[];
 }
 
 export interface IpcInvokeMap {
