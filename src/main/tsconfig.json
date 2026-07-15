@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   "include": ["**/*.ts"],
-  "references": [{ "path": "../shared" }]
+  "references": [{ "path": "../shared" }, { "path": "../core" }]
 }

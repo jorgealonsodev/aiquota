@@ -34,7 +34,7 @@ export type AuthStatus = "healthy" | "auth-expired" | "unconfigured";
  */
 export class TypedError extends Error {
   constructor(
-    readonly kind: "auth-expired" | "network" | "provider-broken",
+    readonly kind: "auth-expired" | "network" | "provider-broken" | "credential-broken",
     message: string,
     readonly status?: number,
   ) {
@@ -49,6 +49,16 @@ export interface ProviderInstance {
   label: string;
   /** Key used to look up this instance's secrets in the SecretStore. */
   credentialsRef: string;
+}
+
+/**
+ * Runtime type guard for `ProviderInstance["providerId"]`. The union type
+ * above is a compile-time-only contract; anything crossing an untrusted
+ * boundary (e.g. an IPC payload from the renderer) must be checked with
+ * this guard before being used to index a `{ codex, claude }` provider map.
+ */
+export function isValidProviderId(value: unknown): value is ProviderInstance["providerId"] {
+  return value === "codex" || value === "claude";
 }
 
 export interface QuotaProvider {
@@ -69,4 +79,57 @@ export interface Settings {
   instances: SettingsInstance[];
   pollIntervalMinutes: number;
   thresholds: number[];
+}
+
+/** Polling-scheduler spec's 1-60 minute bounds. Shared by core/settings.ts (validation) and the renderer settings form (input bounds). */
+export const MIN_INTERVAL_MINUTES = 1;
+export const MAX_INTERVAL_MINUTES = 60;
+
+/** Default settings per the app-settings spec. Shared by core/settings.ts (validation fallback) and the renderer settings form (initial state). */
+export const DEFAULT_SETTINGS: Settings = {
+  instances: [],
+  pollIntervalMinutes: 5,
+  thresholds: [80, 95],
+};
+
+/**
+ * Status of a single provider instance as seen by the tray/popup, folding
+ * together QuotaProvider.authStatus() ("healthy" | "auth-expired" |
+ * "unconfigured") and TypedError.kind ("network" | "provider-broken") into
+ * one field. Single source of truth for both `src/core/aggregate.ts`
+ * (tray aggregation) and `src/shared/ipc.ts` (renderer view-model) — see
+ * design.md "aggregate() Tray Contract".
+ */
+export type InstanceStatus = "healthy" | "auth-expired" | "network" | "provider-broken" | "unconfigured";
+
+export interface InstanceSnapshot {
+  instanceId: string;
+  label: string;
+  enabled: boolean;
+  status: InstanceStatus;
+  /** Only meaningful when status is "healthy"; empty otherwise. */
+  windows: QuotaWindow[];
+  /**
+   * Epoch ms (Clock.now()) of this instance's last completed fetch attempt
+   * (success or failure), or undefined if it has never been fetched.
+   * Rendered by the popup as a "last updated" indicator (quota-popup spec,
+   * "Last Update Timestamp and Manual Refresh"). Threaded through
+   * `src/core/store.ts` from `src/main/index.ts`'s `scheduleInstance`.
+   */
+  fetchedAt?: number;
+}
+
+/**
+ * Shared visibility rule for the tray/popup surfaces: an instance is only
+ * shown when it is enabled AND configured (app-settings spec, "Provider
+ * Enable/Disable" and "Unconfigured Provider Handling"). Instances in an
+ * error state (auth-expired/network/provider-broken) are still visible —
+ * they render an error/reconnect card instead of disappearing (quota-popup
+ * spec, "Error and Reconnect State Rendering"). Single source of truth for
+ * both `src/core/aggregate.ts` (tray color/tooltip) and
+ * `src/renderer/App.tsx` (popup card list) so the two surfaces never
+ * disagree about which instances are shown.
+ */
+export function isVisibleInstance(snapshot: Pick<InstanceSnapshot, "enabled" | "status">): boolean {
+  return snapshot.enabled && snapshot.status !== "unconfigured";
 }

@@ -60,12 +60,22 @@ class TypedError extends Error { constructor(readonly kind:'auth-expired'|'netwo
 | Spike | Primary | Fallback |
 |-------|---------|----------|
 | S1 org-ID discovery | `lastActiveOrg` cookie value after login | manual org-ID input; terminal `unconfigured` (no list-orgs endpoint in contract) |
-| S2 Cloudflare fetch | hidden BrowserWindow + in-page `executeJavaScript` fetch; pure-core decision `nextFetchMode(challengeDetected, lastMode)` escalates hidden→visible + schedules hidden retry | visible/foreground window fetch while challenge persists |
+| S2 Cloudflare fetch | hidden BrowserWindow + in-page `executeJavaScript` fetch; pure-core `CfEscalation` state machine (revised below, apply-phase PR2 review) | visible/foreground window fetch while challenge persists |
 | S3 Codex 401 recovery | 401/403 → `auth-expired` → reconnect-prompt → re-login CLI/web | non-auth failures → `provider-broken` error card + backoff, no reconnect |
 
 ## Scheduler & Notifications
 
 Per-instance timer (interval 1–60min, default 5) via injected `Clock`. Each fetch wrapped in `allSettled`-style isolation: one instance failing never blocks others. On `TypedError` (`network`/`provider-broken`) apply exponential backoff `[60,300,900,1800]s`; success resets stage to 0. **Manual refresh** always executes immediately regardless of backoff state; on success it resets the backoff stage to 0, on failure it advances the stage as if it were a scheduled attempt. NotifyEngine holds a `Set` keyed `(instanceId, windowType, resetsAt, threshold)` — `windowType` here IS `QuotaWindow.kind` (two names for the same field; use `kind` in code, there is no separate `windowType` property) — where `thresholds: number[]` comes from settings (PRD example `[80,95]`): each threshold fires once when `utilization` crosses it; the key changes when `resetsAt` changes (new window generation), naturally re-arming every threshold. `auth-expired` emits a one-shot reconnect notification per transition; `provider-broken` never triggers a reconnect prompt. An instance in `auth-expired` **suspends scheduled polling** until reconnect completes (manual refresh is still allowed and can clear it) — a deliberate refinement of the polling-scheduler spec's blanket "failure → backoff" rule: auth failures do not back off, they suspend.
+
+## Cloudflare Escalation (cf.ts) — REVISED apply-phase PR2 review
+
+The original `nextFetchMode(challengeDetected, lastMode)` pure function was replaced by a stateful (but still Clock-free, still pure-count-based) `CfEscalation` class after review found the function-based version would oscillate hidden↔visible on every single poll whenever challenge results were mixed (e.g. clean/challenged/clean/challenged) — the function had no memory of *how many* clean fetches had occurred, only the single most recent one. `CfEscalation` fixes this with hysteresis:
+- Starts `hidden`. A challenge while `hidden` escalates immediately to `visible`.
+- While `visible`, each challenge resets a `cleanVisibleStreak` counter to 0 and reports `unreachable: true` (a real, visible-foreground fetch still failed — the shell can surface "provider unreachable" instead of silently retrying).
+- Once `cleanVisibleStreak` reaches 5 consecutive clean `visible` fetches, the *next* fetch attempt re-probes `hidden` once (not every poll). If that hidden re-probe is clean, the instance is fully de-escalated back to `hidden`. If it's challenged, it returns to `visible` and the streak resets to 0 (another full run of 5 clean fetches is required before probing again).
+- Net effect: at most 1-in-6 fetches attempts a hidden re-probe during a persistent-challenge period — no per-poll oscillation.
+
+`recordFetch(challengeDetected): { mode, unreachable }` is called once per fetch attempt with that attempt's outcome, and returns the mode to use for the *next* attempt. The constant (5 consecutive clean fetches before a hidden re-probe) is a starting value, not yet spike-validated — S2 (below, still pending manual execution) may justify tuning it once real RAM/reliability data exists for the hidden-fetch approach.
 
 ## aggregate() Tray Contract
 
@@ -80,7 +90,7 @@ Non-secret typed JSON `{ instances, pollIntervalMinutes, thresholds }` persisted
 ```
 src/main/{index,tray,windows,ipc,notifications}.ts   (shell, thin)
 src/main/adapters/electron/{httpClient,secretStore,clock,settingsStore}.ts (port impls)
-src/core/{scheduler,aggregate,notify,store,settings,cf}.ts (pure, tested; settings=schema/validate, cf=nextFetchMode)
+src/core/{scheduler,aggregate,notify,store,settings,cf}.ts (pure, tested; settings=schema/validate, cf=CfEscalation hidden/visible hysteresis)
 src/core/providers/{codex,claude}.ts                 (pure logic; browser IO injected)
 src/preload/index.ts                                 (contextBridge)
 src/renderer/{App,Card,Settings}.tsx  src/shared/{ipc,domain}.ts
@@ -95,7 +105,7 @@ test/**  vitest.config.ts  electron-builder.yml
 | Scheduler backoff/isolation + manual-refresh-vs-backoff | Unit | `vi.useFakeTimers()` + injected `Clock`; assert manual bypasses backoff, resets on success, advances on failure |
 | aggregate() tray color (70/90 bounds, gray), notify-once FSM per threshold | Unit | pure fn tables incl. `thresholds[]` and resetsAt/threshold key change |
 | Settings schema validate + default-on-corruption | Unit | pure `settings.ts` parse fixtures |
-| CF escalation decision `nextFetchMode` | Unit | pure `cf.ts` challenge/lastMode table |
+| CF escalation `CfEscalation` state machine | Unit | pure `cf.ts` recordFetch() sequences: hidden-challenge escalation, 5-clean-streak hidden re-probe, probe-clean de-escalation, probe-challenged reset, visible-challenge unreachable flag |
 | SecretStore keying/encoding | Unit | fake `SecretStore` (real keychain = manual) |
 | Tray/BrowserWindow/IPC wiring, login cookie capture, actual window show/hide manipulation | Untested shell | manual QA checklist |
 
@@ -110,4 +120,4 @@ No migration (greenfield). Spikes are throwaway, never merged.
 ## Open Questions
 
 - [ ] S1: confirm `lastActiveOrg` cookie is set post-login (apply spike) before committing away from manual input.
-- [ ] S2: measure resident RAM of hidden windows vs <150MB budget on prototype.
+- [ ] S2: measure resident RAM of hidden windows vs <150MB budget on prototype. Still pending manual execution as of the Phase 2 apply batch; once it runs, may justify tuning `CfEscalation`'s `CLEAN_VISIBLE_STREAK_BEFORE_HIDDEN_RETRY` constant (currently 5) based on real reliability/RAM data.

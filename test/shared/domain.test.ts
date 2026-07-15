@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TypedError, WINDOW_KIND } from "../../src/shared/domain";
+import { TypedError, WINDOW_KIND, isValidProviderId, isVisibleInstance } from "../../src/shared/domain";
 import type {
   AuthStatus,
   ProviderInstance,
@@ -132,5 +132,29 @@ describe("shared domain contracts", () => {
     fakeProvider.providerId = "claude";
 
     expect(fakeProvider.providerId).toBe("claude");
+  });
+
+  it("isValidProviderId() accepts only the known provider ids (IPC trust boundary guard)", () => {
+    expect(isValidProviderId("codex")).toBe(true);
+    expect(isValidProviderId("claude")).toBe(true);
+    expect(isValidProviderId("gemini")).toBe(false);
+    expect(isValidProviderId(undefined)).toBe(false);
+    expect(isValidProviderId(null)).toBe(false);
+    expect(isValidProviderId(42)).toBe(false);
+  });
+
+  it("isVisibleInstance() shows enabled, configured instances, including ones in an error state (quota-popup spec: Error and Reconnect State Rendering)", () => {
+    expect(isVisibleInstance({ enabled: true, status: "healthy" })).toBe(true);
+    expect(isVisibleInstance({ enabled: true, status: "auth-expired" })).toBe(true);
+    expect(isVisibleInstance({ enabled: true, status: "network" })).toBe(true);
+    expect(isVisibleInstance({ enabled: true, status: "provider-broken" })).toBe(true);
+  });
+
+  it("isVisibleInstance() hides a disabled instance (app-settings spec: Provider Enable/Disable)", () => {
+    expect(isVisibleInstance({ enabled: false, status: "healthy" })).toBe(false);
+  });
+
+  it("isVisibleInstance() hides an unconfigured instance (app-settings spec: Unconfigured Provider Handling)", () => {
+    expect(isVisibleInstance({ enabled: true, status: "unconfigured" })).toBe(false);
   });
 });
