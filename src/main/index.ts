@@ -216,7 +216,30 @@ function applySettings(ctx: BootstrapContext, next: Settings): void {
     }
 
     // Reschedule if interval changed or enabled toggled on.
-    if (instance.enabled && (!prevInstance?.enabled || previous.pollIntervalMinutes !== next.pollIntervalMinutes)) {
+    if (instance.enabled && !prevInstance?.enabled) {
+      // Transitioning from disabled to enabled: only new instances and
+      // Claude org-ID changes (above) call configure() -- this instance was
+      // never configured, so do it now before scheduling polls, mirroring
+      // the new-instance path.
+      void ctx.providers[instance.providerId]
+        .configure(instance)
+        .then(() => {
+          // The user may have disabled/removed this instance while
+          // configure() was still pending.
+          const current = ctx.store.get(instance.instanceId);
+          if (!current || !current.enabled) {
+            return;
+          }
+          scheduleInstance(ctx, instance);
+          ctx.pushState();
+        })
+        .catch((err) => {
+          console.error(`[main] reconfigure failed for instance ${instance.instanceId}`, err);
+          const typed = attachInstanceId(err, instance.instanceId);
+          ctx.store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
+          ctx.pushState();
+        });
+    } else if (instance.enabled && previous.pollIntervalMinutes !== next.pollIntervalMinutes) {
       scheduleInstance(ctx, instance);
     } else if (!instance.enabled && prevInstance?.enabled) {
       ctx.scheduler.cancel(instance.instanceId);
