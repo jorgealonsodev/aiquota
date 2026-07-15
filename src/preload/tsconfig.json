@@ -1,0 +1,16 @@
+{
+  // Deliberately CommonJS even though package.json sets "type": "module":
+  // Electron loads the preload script as CJS regardless of package.json, so
+  // it must not depend on ESM-only resolution to run under contextIsolation.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../dist/preload",
+    "rootDir": ".",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"],
+  "references": [{ "path": "../shared" }]
+}
