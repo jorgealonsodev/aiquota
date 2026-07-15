@@ -149,16 +149,23 @@ export function createWindowManager(): WindowManager {
           // No active session; open the login window and wait for the user.
           const win = createClaudeLoginWindow(instanceId);
           await new Promise<void>((resolve) => {
+            let cancelled = false;
             const checkCookie = async (): Promise<void> => {
+              if (cancelled) return;
               const cookies = await claudeSession.cookies.get({ url: "https://claude.ai", name: "sessionKey" });
+              if (cancelled) return;
               if (cookies.length > 0) {
+                cancelled = true;
                 win.close();
                 resolve();
                 return;
               }
               setTimeout(checkCookie, 1000);
             };
-            win.on("closed", resolve);
+            win.on("closed", () => {
+              cancelled = true;
+              resolve();
+            });
             void checkCookie();
           });
         }
