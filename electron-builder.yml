@@ -10,6 +10,7 @@ directories:
 
 files:
   - dist/**/*
+  - assets/**/*
   - package.json
   - "!dist/**/*.map"
   - "!dist/**/*.tsbuildinfo"
