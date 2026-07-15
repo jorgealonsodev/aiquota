@@ -285,6 +285,7 @@ function scheduleInstance(ctx: BootstrapContext, instance: SettingsInstance): vo
           showReconnectNotification(event);
         }
       }
+      throw typed;
     } finally {
       ctx.tray.update(aggregate(ctx.store.getAll()));
       ctx.pushState();
