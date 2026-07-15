@@ -79,6 +79,17 @@ function buildHandlers(ctx: BootstrapContext): IpcInvokeMap {
       if (!isValidProviderId(providerId)) {
         throw new Error(`addAccount: invalid providerId "${String(providerId)}"`);
       }
+      // MVP scope guard (provider-adapters spec): adapters are built to
+      // support N instances per provider, but the MVP UI exposes only one
+      // instance per provider. ClaudeProvider/CodexProvider are singletons
+      // with one shared session/credential per provider type, so a second
+      // instance of the same provider would silently share the first
+      // instance's login/session rather than being independent.
+      if (ctx.settings.instances.some((i) => i.providerId === providerId)) {
+        throw new Error(
+          `addAccount: an instance for provider "${providerId}" already exists (MVP supports one instance per provider)`,
+        );
+      }
       const id = `${providerId}-${Date.now()}`;
       const newInstance: SettingsInstance = {
         instanceId: id,
@@ -133,9 +144,12 @@ function applySettings(ctx: BootstrapContext, next: Settings): void {
       ctx.store.remove(id);
       ctx.notifier.remove(id);
       // Secure Credential Deletion (credential-store spec): removing an
-      // instance must actually erase its stored secret and, for Claude
-      // instances, the persisted login-session cookies -- otherwise the
-      // credential silently survives on disk after the account is removed.
+      // instance must erase any stored secret and, for Claude instances,
+      // the persisted login-session cookies. Today no provider writes
+      // through secretStore.set() (Codex reads ~/.codex/auth.json
+      // directly, Claude relies on session cookies), so this delete() call
+      // is currently a forward-looking no-op; the session-partition clear
+      // below is the operative cleanup for Claude instances.
       if (removed) {
         void ctx.secretStore.delete(removed.credentialsRef).catch((err) => {
           console.error(`[main] failed to delete credential for removed instance ${id}`, err);

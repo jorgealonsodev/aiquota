@@ -108,4 +108,22 @@ describe("Settings (app-settings spec)", () => {
     expect(html).toContain("Add Codex account");
     expect(html).toContain("Add Claude account");
   });
+
+  it("disables the add-account button once an instance for that provider exists (MVP one-instance-per-provider limit)", () => {
+    const api = fakeApi({ instances: [], pollIntervalMinutes: 5, thresholds: [80] });
+
+    const html = renderToStaticMarkup(
+      <Settings
+        api={api}
+        initialSettings={{
+          instances: [settingsInstance({ instanceId: "claude-1", providerId: "claude" })],
+          pollIntervalMinutes: 5,
+          thresholds: [80],
+        }}
+      />,
+    );
+
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>\s*Add Claude account/);
+    expect(html).not.toMatch(/<button[^>]*disabled[^>]*>\s*Add Codex account/);
+  });
 });

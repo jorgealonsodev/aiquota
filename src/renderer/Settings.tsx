@@ -127,10 +127,18 @@ export function Settings({ api, initialSettings }: SettingsProps): JSX.Element {
           </div>
         ))}
         <div className="settings-add-account">
-          <button type="button" onClick={() => handleAddAccount("codex")}>
+          <button
+            type="button"
+            onClick={() => handleAddAccount("codex")}
+            disabled={settings.instances.some((i) => i.providerId === "codex")}
+          >
             Add Codex account
           </button>
-          <button type="button" onClick={() => handleAddAccount("claude")}>
+          <button
+            type="button"
+            onClick={() => handleAddAccount("claude")}
+            disabled={settings.instances.some((i) => i.providerId === "claude")}
+          >
             Add Claude account
           </button>
         </div>
