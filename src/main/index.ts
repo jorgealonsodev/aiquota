@@ -376,13 +376,16 @@ async function bootstrap(): Promise<void> {
   createIpcHandlers(buildHandlers(ctx));
 
   for (const instance of settings.instances.filter((i) => i.enabled)) {
-    await providers[instance.providerId]
-      .configure(instance)
-      .catch((err) => {
-        console.error(`[main] initial configure failed for instance ${instance.instanceId}`, err);
-        const typed = attachInstanceId(err, instance.instanceId);
-        store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
-      });
+    try {
+      await providers[instance.providerId].configure(instance);
+    } catch (err) {
+      console.error(`[main] initial configure failed for instance ${instance.instanceId}`, err);
+      const typed = attachInstanceId(err, instance.instanceId);
+      store.update(instance.instanceId, { status: typed.kind === "auth-expired" ? "auth-expired" : "provider-broken" });
+      // configure() failed: skip authStatus(), which would misreport this
+      // real failure as "unconfigured" and hide it from the UI.
+      continue;
+    }
     const authStatus = await providers[instance.providerId].authStatus(instance);
     store.update(instance.instanceId, { status: authStatus });
     if (authStatus === "healthy") {
