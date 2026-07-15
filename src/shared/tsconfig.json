@@ -1,8 +1,17 @@
 {
+  // Deliberately CommonJS even though package.json sets "type": "module":
+  // src/shared is loaded at runtime by both src/main and src/core (real
+  // Node/CJS require() graphs — the renderer instead compiles this package
+  // straight from .ts source via esbuild, so this outDir format has no
+  // effect on it). See src/core/tsconfig.json for the full rationale.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../../dist/shared",
-    "rootDir": "."
+    "rootDir": ".",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "lib": ["ES2022"],
+    "types": ["node"]
   },
   "include": ["**/*.ts"]
 }
