@@ -55,8 +55,8 @@ export class NotifyEngine {
    * any notify-once entries whose resetsAt has already elapsed, bounding
    * memory growth for a long-running multi-day process.
    */
-  processWindow(reading: WindowReading, thresholds: number[]): ThresholdCrossedEvent[] {
-    this.pruneExpired();
+  processWindow(reading: WindowReading, thresholds: number[], now = this.clock.now()): ThresholdCrossedEvent[] {
+    this.pruneExpired(now);
 
     const events: ThresholdCrossedEvent[] = [];
 
@@ -107,8 +107,7 @@ export class NotifyEngine {
     this.lastAuthStatus.delete(instanceId);
   }
 
-  private pruneExpired(): void {
-    const now = this.clock.now();
+  private pruneExpired(now: number): void {
     for (const [key, resetsAt] of this.notifiedKeys) {
       if (resetsAt !== null && new Date(resetsAt).getTime() < now) {
         this.notifiedKeys.delete(key);

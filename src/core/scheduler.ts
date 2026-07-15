@@ -37,7 +37,8 @@ interface InstanceState {
 }
 
 function classifyFailure(err: unknown): "auth-expired" | "network" | "provider-broken" {
-  if (err instanceof TypedError) return err.kind;
+  if (err instanceof TypedError && err.kind !== "credential-broken") return err.kind;
+  if (err instanceof TypedError) return "provider-broken"; // credential-broken maps to provider-broken for scheduler
   // A poll() that throws something other than TypedError is a programming
   // error in the caller, not a classified quota failure — treat it as the
   // safest classification (backs off, does not silently suspend polling).

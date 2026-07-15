@@ -12,20 +12,18 @@ const DEFAULT_SNAPSHOT_DEFAULTS: Pick<InstanceSnapshot, "label" | "enabled" | "s
   windows: [],
 };
 
-export interface UpdatePatch extends Partial<Omit<InstanceSnapshot, "instanceId">> {
-  /**
-   * A monotonic marker (e.g. Clock.now() at fetch time) identifying when
-   * this patch's data was produced. Used to reject out-of-order writes —
-   * a patch whose fetchedAt is older than the last accepted fetchedAt for
-   * this instance is ignored (a slow retry completing after a newer
-   * result must not overwrite it).
-   */
-  fetchedAt?: number;
-}
+/**
+ * A partial update to an existing snapshot. `fetchedAt`, when provided, is
+ * both stored on the resulting snapshot (so the popup can render a
+ * "last updated" indicator — quota-popup spec) and used to reject
+ * out-of-order writes: a patch whose fetchedAt is older than the
+ * snapshot's current fetchedAt is ignored entirely (a slow retry
+ * completing after a newer result must not overwrite it).
+ */
+export type UpdatePatch = Partial<Omit<InstanceSnapshot, "instanceId">>;
 
 export class StateStore {
   private readonly snapshots = new Map<string, InstanceSnapshot>();
-  private readonly lastFetchedAt = new Map<string, number>();
 
   /**
    * Explicitly adds `instanceId` to the store with an initial snapshot.
@@ -41,9 +39,9 @@ export class StateStore {
       enabled: initial.enabled ?? DEFAULT_SNAPSHOT_DEFAULTS.enabled,
       status: initial.status ?? DEFAULT_SNAPSHOT_DEFAULTS.status,
       windows: initial.windows ?? DEFAULT_SNAPSHOT_DEFAULTS.windows,
+      fetchedAt: initial.fetchedAt,
     };
     this.snapshots.set(instanceId, snapshot);
-    this.lastFetchedAt.delete(instanceId);
     return snapshot;
   }
 
@@ -51,19 +49,15 @@ export class StateStore {
    * Merges `patch` into the existing snapshot for `instanceId`. Returns
    * `undefined` (a no-op) if the instance was never register()ed or has
    * since been remove()d. If `patch.fetchedAt` is provided and is older
-   * than the last accepted fetchedAt for this instance, the entire patch
-   * is ignored and the current snapshot is returned unchanged.
+   * than the snapshot's current fetchedAt, the entire patch is ignored and
+   * the current snapshot is returned unchanged.
    */
   update(instanceId: string, patch: UpdatePatch): InstanceSnapshot | undefined {
     const existing = this.snapshots.get(instanceId);
     if (!existing) return undefined;
 
-    if (patch.fetchedAt !== undefined) {
-      const lastAccepted = this.lastFetchedAt.get(instanceId);
-      if (lastAccepted !== undefined && patch.fetchedAt < lastAccepted) {
-        return existing;
-      }
-      this.lastFetchedAt.set(instanceId, patch.fetchedAt);
+    if (patch.fetchedAt !== undefined && existing.fetchedAt !== undefined && patch.fetchedAt < existing.fetchedAt) {
+      return existing;
     }
 
     const merged: InstanceSnapshot = {
@@ -72,6 +66,7 @@ export class StateStore {
       enabled: patch.enabled ?? existing.enabled,
       status: patch.status ?? existing.status,
       windows: patch.windows ?? existing.windows,
+      fetchedAt: patch.fetchedAt ?? existing.fetchedAt,
     };
     this.snapshots.set(instanceId, merged);
     return merged;
@@ -80,7 +75,6 @@ export class StateStore {
   /** Removes an instance's snapshot (e.g. the user deleted the account). */
   remove(instanceId: string): void {
     this.snapshots.delete(instanceId);
-    this.lastFetchedAt.delete(instanceId);
   }
 
   get(instanceId: string): InstanceSnapshot | undefined {

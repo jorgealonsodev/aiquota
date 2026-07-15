@@ -2,24 +2,16 @@
 // Zero Electron imports: takes a list of per-instance snapshots and derives
 // the tray icon color + tooltip. The Electron shell (Phase 4) is responsible
 // for building InstanceSnapshot[] from the StateStore and painting the icon.
-import type { QuotaWindow } from "../shared/domain";
+import type { InstanceSnapshot, InstanceStatus, QuotaWindow } from "../shared/domain";
+import { isVisibleInstance } from "../shared/domain";
 
 /**
- * Status of a single provider instance as seen by the tray, folding together
- * QuotaProvider.authStatus() ("healthy" | "auth-expired" | "unconfigured")
- * and TypedError.kind ("network" | "provider-broken") into one field so
- * aggregate() has a single source of truth for "is this instance usable".
+ * InstanceStatus/InstanceSnapshot are defined in `src/shared/domain.ts` (the
+ * single source of truth also used by `src/shared/ipc.ts`'s renderer
+ * view-model) and re-exported here for backward-compatible imports from
+ * `./aggregate`.
  */
-export type InstanceStatus = "healthy" | "auth-expired" | "network" | "provider-broken" | "unconfigured";
-
-export interface InstanceSnapshot {
-  instanceId: string;
-  label: string;
-  enabled: boolean;
-  status: InstanceStatus;
-  /** Only meaningful when status is "healthy"; empty otherwise. */
-  windows: QuotaWindow[];
-}
+export type { InstanceStatus, InstanceSnapshot };
 
 export type TrayColor = "green" | "amber" | "red" | "gray";
 
@@ -31,10 +23,6 @@ export interface TrayState {
 /** Amber lower bound (inclusive) and red lower bound (exclusive), per tray-status spec. */
 const AMBER_MIN_UTILIZATION = 70;
 const RED_MIN_UTILIZATION = 90;
-
-function isTooltipVisible(snapshot: InstanceSnapshot): boolean {
-  return snapshot.enabled && snapshot.status !== "unconfigured";
-}
 
 function isHealthy(snapshot: InstanceSnapshot): boolean {
   return snapshot.status === "healthy";
@@ -58,7 +46,7 @@ function tooltipSegment(snapshot: InstanceSnapshot): string {
 }
 
 export function aggregate(snapshots: InstanceSnapshot[]): TrayState {
-  const visible = snapshots.filter(isTooltipVisible);
+  const visible = snapshots.filter(isVisibleInstance);
   const healthy = visible.filter(isHealthy);
 
   const tooltip = visible.map(tooltipSegment).join(" · ");

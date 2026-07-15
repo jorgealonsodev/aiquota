@@ -25,9 +25,10 @@ describe("NotifyEngine (notifications spec)", () => {
   it("fires each configured threshold independently within the same window generation", () => {
     const engine = new NotifyEngine();
     const resetsAt = "2026-07-10T12:00:00.000Z";
+    const now = new Date("2026-07-10T11:00:00.000Z").getTime();
 
-    const first = engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 82, resetsAt }, [80, 95]);
-    const second = engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 96, resetsAt }, [80, 95]);
+    const first = engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 82, resetsAt }, [80, 95], now);
+    const second = engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 96, resetsAt }, [80, 95], now);
 
     expect(first.map((e) => e.threshold)).toEqual([80]);
     expect(second.map((e) => e.threshold)).toEqual([95]);
@@ -36,10 +37,11 @@ describe("NotifyEngine (notifications spec)", () => {
   it("does not repeat a notification for the same (instanceId, windowKind, resetsAt, threshold) key", () => {
     const engine = new NotifyEngine();
     const resetsAt = "2026-07-10T12:00:00.000Z";
+    const now = new Date("2026-07-10T11:00:00.000Z").getTime();
     const reading = { instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt };
 
-    const first = engine.processWindow(reading, [80]);
-    const second = engine.processWindow(reading, [80]);
+    const first = engine.processWindow(reading, [80], now);
+    const second = engine.processWindow(reading, [80], now);
 
     expect(first).toHaveLength(1);
     expect(second).toHaveLength(0);
@@ -107,14 +109,16 @@ describe("NotifyEngine (notifications spec)", () => {
   it("remove() only evicts the targeted instance, leaving others untouched", () => {
     const engine = new NotifyEngine();
     const resetsAt = "2026-07-10T12:00:00.000Z";
-    engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80]);
-    engine.processWindow({ instanceId: "codex-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80]);
+    const now = new Date("2026-07-10T11:00:00.000Z").getTime();
+    engine.processWindow({ instanceId: "claude-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80], now);
+    engine.processWindow({ instanceId: "codex-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt }, [80], now);
 
     engine.remove("claude-1");
 
     const codexRepeat = engine.processWindow(
       { instanceId: "codex-1", kind: WINDOW_KIND.FiveHour, utilization: 85, resetsAt },
       [80],
+      now,
     );
 
     expect(codexRepeat).toHaveLength(0); // codex-1's notify-once state is untouched by removing claude-1

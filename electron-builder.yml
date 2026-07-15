@@ -1,0 +1,31 @@
+# electron-builder config (packaging spec: "Electron-Builder Installer
+# Targets"). MVP scope is Linux (AppImage, .deb) and Windows (NSIS .exe)
+# only — macOS is explicitly out of scope for this release.
+appId: com.aiquota.app
+productName: AIQuota
+copyright: Copyright (c) 2026 AIQuota
+
+directories:
+  output: release
+
+files:
+  - dist/**/*
+  - package.json
+  - "!dist/**/*.map"
+  - "!dist/**/*.tsbuildinfo"
+  - "!dist/**/*.d.ts"
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  maintainer: AIQuota <jorgealonsodev@gmail.com>
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
