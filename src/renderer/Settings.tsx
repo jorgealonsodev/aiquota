@@ -81,6 +81,10 @@ export function Settings({ api, initialSettings }: SettingsProps): JSX.Element {
     api?.updateSettings(settings);
   };
 
+  const handleAddAccount = (providerId: SettingsInstance["providerId"]) => {
+    api?.addAccount(providerId);
+  };
+
   return (
     <main className="settings">
       <h1>AIQuota Settings</h1>
@@ -122,6 +126,14 @@ export function Settings({ api, initialSettings }: SettingsProps): JSX.Element {
             )}
           </div>
         ))}
+        <div className="settings-add-account">
+          <button type="button" onClick={() => handleAddAccount("codex")}>
+            Add Codex account
+          </button>
+          <button type="button" onClick={() => handleAddAccount("claude")}>
+            Add Claude account
+          </button>
+        </div>
       </section>
 
       <section className="settings-section">

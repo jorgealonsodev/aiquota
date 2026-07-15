@@ -99,4 +99,13 @@ describe("Settings (app-settings spec)", () => {
 
     expect(html).toContain("Save");
   });
+
+  it("renders an add-account control for every supported provider", () => {
+    const api = fakeApi({ instances: [], pollIntervalMinutes: 5, thresholds: [80] });
+
+    const html = renderToStaticMarkup(<Settings api={api} initialSettings={{ instances: [], pollIntervalMinutes: 5, thresholds: [80] }} />);
+
+    expect(html).toContain("Add Codex account");
+    expect(html).toContain("Add Claude account");
+  });
 });
